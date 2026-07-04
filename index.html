@@ -256,7 +256,7 @@
       border-radius: 22px 22px 0 0;
       transform: translateY(calc(100% - var(--peek)));
       transition: transform .38s cubic-bezier(.32,.72,0,1);
-      max-height: 88vh;
+      max-height: 65vh;
       display: flex;
       flex-direction: column;
     }
@@ -283,6 +283,26 @@
       background: rgba(255,255,255,0.22);
       border-radius: 2px;
       margin-bottom: 10px;
+    }
+
+    .btn-close-sheet {
+      display: none; /* 데스크탑에서 숨김 */
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.6);
+      font-size: 14px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      touch-action: manipulation;
+    }
+
+    @media (max-width: 740px) {
+      .btn-close-sheet { display: flex; }
     }
 
     .sheet-title-row {
@@ -611,7 +631,7 @@
     <div class="handle-pill"></div>
     <div class="sheet-title-row">
       <span class="sheet-title">⚙️ 뽑기 설정</span>
-      <span class="sheet-arrow">▲</span>
+      <button class="btn-close-sheet" id="btnCloseSheet">✕</button>
     </div>
   </div>
 
@@ -691,6 +711,7 @@
   const settingsDrop    = document.getElementById('settingsDropdown');
   const menuClearCache  = document.getElementById('menuClearCache');
   const menuReset       = document.getElementById('menuReset');
+  const btnCloseSheet   = document.getElementById('btnCloseSheet');
 
   let CX, CY, R;
   let slots = [];
@@ -718,6 +739,7 @@
   });
 
   backdrop.addEventListener('click', closeSheet);
+  btnCloseSheet.addEventListener('click', (e) => { e.stopPropagation(); closeSheet(); });
 
   /* ── 캔버스 반응형 리사이즈 ── */
   function resizeCanvas() {

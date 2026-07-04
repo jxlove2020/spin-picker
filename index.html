@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Spin Picker · 뽑기판</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --peek: 62px;          /* 바텀시트 항상 보이는 높이 */
+      --sheet-bg: #1a1740;
+      --purple: #a78bfa;
+      --purple-dark: #7c3aed;
+      --panel-bg: rgba(255,255,255,0.07);
+      --panel-border: rgba(255,255,255,0.12);
+      --radius: 18px;
+    }
+
+    body {
+      font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Segoe UI', sans-serif;
+      background: linear-gradient(150deg, #0f0c29 0%, #302b63 60%, #24243e 100%);
+      background-attachment: fixed;
+      min-height: 100vh;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* ── 헤더 ── */
+    header {
+      width: 100%;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(15,12,41,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .logo { font-size: 24px; }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span {
+      font-size: 12px;
+      color: rgba(255,255,255,0.4);
+      font-weight: 400;
+      margin-left: 6px;
+    }
+
+    /* ── 앱 레이아웃 ── */
+    .app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1100px;
+      /* 모바일: 바텀시트 peek만큼 하단 여백 */
+      padding-bottom: var(--peek);
+    }
+
+    /* ── 휠 섹션 ── */
+    .wheel-section {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 28px 20px 24px;
+      gap: 20px;
+    }
+
+    .wheel-wrap {
+      position: relative;
+      display: inline-block;
+    }
+
+    .wheel-wrap canvas {
+      display: block;
+      filter: drop-shadow(0 0 32px rgba(167,139,250,0.35));
+      max-width: 100%;
+    }
+
+    .pointer {
+      position: absolute;
+      top: 50%;
+      right: -16px;
+      transform: translateY(-50%);
+      width: 0;
+      height: 0;
+      border-top: 14px solid transparent;
+      border-bottom: 14px solid transparent;
+      border-right: 30px solid #fff;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    }
+
+    .btn-spin {
+      width: 100%;
+      max-width: 360px;
+      padding: 16px 0;
+      border-radius: 50px;
+      border: none;
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s, opacity .2s;
+      box-shadow: 0 4px 20px rgba(239,68,68,0.4);
+      touch-action: manipulation;
+    }
+
+    .btn-spin:active { transform: scale(.96); }
+    .btn-spin:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    .result-box {
+      width: 100%;
+      max-width: 360px;
+      border-radius: 16px;
+      min-height: 64px;
+    }
+
+    .result-box.show {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      padding: 16px 20px;
+      animation: pop .35s cubic-bezier(.34,1.56,.64,1);
+    }
+
+    @keyframes pop {
+      from { transform: scale(.85); opacity: 0; }
+      to   { transform: scale(1);   opacity: 1; }
+    }
+
+    .result-label { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
+
+    .result-value {
+      font-size: 28px;
+      font-weight: 800;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+
+    /* ════════════════════════════════
+       바텀 시트 (모바일 기본)
+    ════════════════════════════════ */
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 45;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s;
+    }
+
+    .backdrop.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .settings-section {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 50;
+      background: var(--sheet-bg);
+      border-radius: 22px 22px 0 0;
+      transform: translateY(calc(100% - var(--peek)));
+      transition: transform .38s cubic-bezier(.32,.72,0,1);
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .settings-section.open {
+      transform: translateY(0);
+    }
+
+    /* 핸들 바 */
+    .sheet-handle-bar {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 20px 14px;
+      cursor: pointer;
+      user-select: none;
+      touch-action: manipulation;
+      flex-shrink: 0;
+    }
+
+    .handle-pill {
+      width: 36px;
+      height: 4px;
+      background: rgba(255,255,255,0.22);
+      border-radius: 2px;
+      margin-bottom: 10px;
+    }
+
+    .sheet-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+    }
+
+    .sheet-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.88);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .sheet-arrow {
+      font-size: 13px;
+      color: rgba(255,255,255,0.4);
+      transition: transform .35s;
+    }
+
+    .settings-section.open .sheet-arrow {
+      transform: rotate(180deg);
+    }
+
+    /* 패널 내용 영역 */
+    .panel {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      flex: 1;
+      padding: 4px 20px calc(24px + env(safe-area-inset-bottom));
+    }
+
+    .panel::-webkit-scrollbar { width: 3px; }
+    .panel::-webkit-scrollbar-track { background: transparent; }
+    .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+    /* ── 폼 요소 ── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .8px;
+      color: rgba(255,255,255,0.38);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .preset-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .preset-select {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 32px 12px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+
+    .preset-select:focus { border-color: var(--purple); }
+    .preset-select option { background: #1a1740; color: #fff; }
+
+    .btn-load-preset {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #10b981, #06b6d4);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      touch-action: manipulation;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 12px 0 16px;
+    }
+
+    .count-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .count-row label {
+      font-size: 14px;
+      color: rgba(255,255,255,0.65);
+      white-space: nowrap;
+    }
+
+    .count-row input[type="number"] {
+      width: 72px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 16px;
+      text-align: center;
+      outline: none;
+    }
+
+    .count-row input[type="number"]:focus { border-color: var(--purple); }
+
+    .btn-apply {
+      padding: 10px 18px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, var(--purple-dark), var(--purple));
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .slots-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slot-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .slot-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .slot-item input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      padding: 12px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+    }
+
+    .slot-item input[type="text"]:focus {
+      border-color: var(--purple);
+      background: rgba(255,255,255,0.12);
+    }
+
+    .slot-item input[type="text"]::placeholder { color: rgba(255,255,255,0.3); }
+
+    .panel-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .btn-save {
+      flex: 1;
+      padding: 14px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #06b6d4, #3b82f6);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .btn-save:active { opacity: .85; }
+
+    .btn-reset {
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.06);
+      color: rgba(255,255,255,0.6);
+      font-size: 15px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .save-msg {
+      font-size: 12px;
+      color: #34d399;
+      text-align: center;
+      margin-top: 10px;
+      min-height: 18px;
+      transition: opacity .4s;
+    }
+
+    /* ════════════════════════════════
+       데스크탑 (741px+)
+    ════════════════════════════════ */
+    @media (min-width: 741px) {
+      header { padding: 18px 32px; }
+      header .logo { font-size: 28px; }
+      header h1 { font-size: 22px; }
+      header h1 span { font-size: 13px; }
+
+      .app {
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 32px;
+        padding: 32px;   /* 바텀시트 여백 제거 */
+      }
+
+      /* 사이드 패널로 전환 */
+      .backdrop { display: none !important; }
+
+      .settings-section {
+        position: static;        /* fixed 해제 */
+        transform: none !important;
+        transition: none;
+        max-height: none;
+        width: 320px;
+        flex-shrink: 0;
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: var(--radius);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        order: -1;
+        /* 항상 열린 상태 */
+      }
+
+      /* 핸들 바 → 패널 헤더로 */
+      .sheet-handle-bar {
+        cursor: default;
+        padding: 22px 24px 16px;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 8px;
+      }
+
+      .handle-pill { display: none; }
+
+      .sheet-title-row {
+        justify-content: flex-start;
+        gap: 0;
+      }
+
+      .sheet-title {
+        font-size: 16px;
+      }
+
+      .sheet-arrow { display: none; }
+
+      .panel {
+        padding: 0 24px 22px;
+        overflow: visible;
+      }
+
+      .wheel-section {
+        flex: 1;
+        padding: 0;
+        padding-top: 4px;
+      }
+
+      .btn-spin {
+        max-width: 460px;
+      }
+
+      .result-box { max-width: 460px; }
+
+      .btn-spin:hover { transform: scale(1.03); box-shadow: 0 6px 28px rgba(239,68,68,0.5); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎡</div>
+  <h1>Spin Picker <span>뽑기판</span></h1>
+</header>
+
+<div class="app">
+
+  <!-- 휠 섹션 -->
+  <section class="wheel-section">
+    <div class="wheel-wrap">
+      <canvas id="wheelCanvas"></canvas>
+      <div class="pointer"></div>
+    </div>
+
+    <button class="btn-spin" id="btnSpin">▶ 돌리기!</button>
+
+    <div class="result-box" id="resultBox">
+      <div class="result-label" id="resultLabel"></div>
+      <div class="result-value" id="resultValue"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- 배경 오버레이 -->
+<div class="backdrop" id="backdrop"></div>
+
+<!-- 설정 시트 / 사이드 패널 -->
+<div class="settings-section" id="settingsSection">
+
+  <!-- 핸들 바 (모바일: 탭 트리거 / 데스크탑: 패널 헤더) -->
+  <div class="sheet-handle-bar" id="sheetHandleBar">
+    <div class="handle-pill"></div>
+    <div class="sheet-title-row">
+      <span class="sheet-title">⚙️ 뽑기 설정</span>
+      <span class="sheet-arrow">▲</span>
+    </div>
+  </div>
+
+  <div class="panel">
+
+    <div class="section-label">📋 예제 불러오기</div>
+    <div class="preset-row">
+      <select class="preset-select" id="presetSelect">
+        <option value="">-- 예제 선택 --</option>
+        <option value="church_food">🍽️ 교회근처 식당</option>
+      </select>
+      <button class="btn-load-preset" id="btnLoadPreset">불러오기</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-label">칸 수 설정</div>
+    <div class="count-row">
+      <label>칸 수</label>
+      <input type="number" id="slotCount" min="2" max="20" value="6" inputmode="numeric" />
+      <button class="btn-apply" id="btnApply">적용</button>
+    </div>
+
+    <div class="section-label">항목 입력</div>
+    <div class="slots-list" id="slotsList"></div>
+
+    <div class="panel-actions">
+      <button class="btn-save" id="btnSave">💾 저장</button>
+      <button class="btn-reset" id="btnReset">초기화</button>
+    </div>
+    <div class="save-msg" id="saveMsg"></div>
+
+  </div>
+</div>
+
+<script>
+  const COLORS = [
+    '#FF6B6B','#FF8E53','#FFC857','#2EC4B6',
+    '#3A86FF','#8338EC','#FF006E','#06D6A0',
+    '#FFBE0B','#118AB2','#F72585','#7209B7',
+    '#4CC9F0','#4895EF','#43AA8B','#F94144',
+    '#F3722C','#90BE6D','#577590','#277DA1',
+  ];
+
+  const STORAGE_KEY = 'spin-picker-data';
+
+  const PRESETS = {
+    church_food: {
+      title: '교회근처 식당',
+      items: ['돈까스', '초밥', '칼국수', '롯데리아', '김밥', '순대국', '뼈해장국'],
+    },
+  };
+
+  const canvas         = document.getElementById('wheelCanvas');
+  const ctx            = canvas.getContext('2d');
+  const btnApply       = document.getElementById('btnApply');
+  const btnSave        = document.getElementById('btnSave');
+  const btnReset       = document.getElementById('btnReset');
+  const btnSpin        = document.getElementById('btnSpin');
+  const btnLoadPreset  = document.getElementById('btnLoadPreset');
+  const presetSelect   = document.getElementById('presetSelect');
+  const slotsList      = document.getElementById('slotsList');
+  const slotCountInput = document.getElementById('slotCount');
+  const resultBox      = document.getElementById('resultBox');
+  const resultLabel    = document.getElementById('resultLabel');
+  const resultValue    = document.getElementById('resultValue');
+  const saveMsg        = document.getElementById('saveMsg');
+  const settingsSection  = document.getElementById('settingsSection');
+  const sheetHandleBar   = document.getElementById('sheetHandleBar');
+  const backdrop         = document.getElementById('backdrop');
+
+  let CX, CY, R;
+  let slots = [];
+  let currentAngle = 0;
+  let spinning = false;
+
+  /* ── 바텀시트 열기 / 닫기 ── */
+  function isMobile() { return window.innerWidth < 741; }
+
+  function openSheet() {
+    settingsSection.classList.add('open');
+    backdrop.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSheet() {
+    settingsSection.classList.remove('open');
+    backdrop.classList.remove('visible');
+    document.body.style.overflow = '';
+  }
+
+  sheetHandleBar.addEventListener('click', () => {
+    if (!isMobile()) return;
+    settingsSection.classList.contains('open') ? closeSheet() : openSheet();
+  });
+
+  backdrop.addEventListener('click', closeSheet);
+
+  /* ── 캔버스 반응형 리사이즈 ── */
+  function resizeCanvas() {
+    const desktop = !isMobile();
+    const maxSize = 460;
+    const pad = desktop ? 0 : 48;
+    const size = Math.min(Math.max(window.innerWidth - pad, 260), maxSize);
+
+    canvas.width  = size;
+    canvas.height = size;
+    CX = size / 2;
+    CY = size / 2;
+    R  = CX - 20;
+    drawWheel();
+  }
+
+  /* ── 저장 ── */
+  function saveData() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      count: slots.length,
+      labels: slots.map(s => s.label),
+    }));
+    showMsg('✔ 저장됐어요!');
+  }
+
+  function loadData() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  }
+
+  function showMsg(text) {
+    saveMsg.textContent = text;
+    saveMsg.style.opacity = '1';
+    clearTimeout(showMsg._t);
+    showMsg._t = setTimeout(() => { saveMsg.style.opacity = '0'; }, 2400);
+  }
+
+  /* ── 슬롯 ── */
+  function buildSlots(count, labels = []) {
+    slots = Array.from({ length: count }, (_, i) => ({
+      label: labels[i] ?? '',
+      color: COLORS[i % COLORS.length],
+    }));
+  }
+
+  function renderInputs() {
+    slotsList.innerHTML = '';
+    slots.forEach((s, i) => {
+      const item = document.createElement('div');
+      item.className = 'slot-item';
+
+      const dot = document.createElement('div');
+      dot.className = 'slot-dot';
+      dot.style.background = s.color;
+
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = `항목 ${i + 1}`;
+      inp.value = s.label;
+      inp.addEventListener('input', () => { slots[i].label = inp.value; drawWheel(); });
+
+      item.append(dot, inp);
+      slotsList.appendChild(item);
+    });
+  }
+
+  /* ── 휠 그리기 ── */
+  function drawWheel() {
+    if (!CX) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!slots.length) return;
+
+    const arc = (Math.PI * 2) / slots.length;
+
+    ctx.beginPath();
+    ctx.arc(CX, CY, R + 4, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fill();
+
+    slots.forEach((s, i) => {
+      const startAngle = currentAngle + arc * i - Math.PI / 2;
+      const endAngle   = startAngle + arc;
+
+      ctx.beginPath();
+      ctx.moveTo(CX, CY);
+      ctx.arc(CX, CY, R, startAngle, endAngle);
+      ctx.closePath();
+      ctx.fillStyle = s.color;
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(CX, CY);
+      ctx.rotate(startAngle + arc / 2);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#fff';
+      const label = s.label || `항목 ${i + 1}`;
+      const fontSize = Math.min(16, Math.max(9, Math.floor(R * arc / (label.length * 1.3 + 1))));
+      ctx.font = `bold ${fontSize}px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`;
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur  = 3;
+      ctx.fillText(label, R - 10, fontSize / 3, R - 28);
+      ctx.restore();
+    });
+
+    const grad = ctx.createRadialGradient(CX, CY, 0, CX, CY, 30);
+    grad.addColorStop(0, '#fff');
+    grad.addColorStop(1, '#d1d5db');
+    ctx.beginPath();
+    ctx.arc(CX, CY, 30, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.shadowColor = 'rgba(0,0,0,0.35)';
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.font = `${Math.max(16, Math.floor(R * 0.12))}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎯', CX, CY);
+  }
+
+  /* ── 스핀 ── */
+  function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
+
+  function spin() {
+    if (spinning || !slots.length) return;
+    spinning = true;
+    btnSpin.disabled = true;
+    resultBox.className = 'result-box';
+
+    const totalRot = Math.PI * 2 * (5 + Math.random() * 5);
+    const duration = 4000 + Math.random() * 1500;
+    const start    = currentAngle;
+    const t0       = performance.now();
+
+    function frame(now) {
+      const progress = Math.min((now - t0) / duration, 1);
+      currentAngle = start + totalRot * easeOut(progress);
+      drawWheel();
+      if (progress < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        spinning = false;
+        btnSpin.disabled = false;
+        showResult();
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ── 결과 ── */
+  function showResult() {
+    const arc = (Math.PI * 2) / slots.length;
+    const normalized = ((-(currentAngle - Math.PI / 2)) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const index  = Math.floor(normalized / arc) % slots.length;
+    const winner = slots[index];
+    const label  = winner.label.trim() || `항목 ${index + 1}`;
+
+    resultLabel.textContent = '🎉 당첨!';
+    resultValue.textContent = label;
+    resultValue.style.background = `linear-gradient(135deg, ${winner.color}, #fff)`;
+    resultValue.style.webkitBackgroundClip = 'text';
+    resultValue.style.backgroundClip = 'text';
+    resultBox.className = 'result-box show';
+  }
+
+  /* ── 이벤트 ── */
+  btnApply.addEventListener('click', () => {
+    const count = Math.min(20, Math.max(2, parseInt(slotCountInput.value) || 6));
+    slotCountInput.value = count;
+    buildSlots(count, slots.map(s => s.label));
+    renderInputs();
+    drawWheel();
+  });
+
+  btnSave.addEventListener('click', saveData);
+
+  btnReset.addEventListener('click', () => {
+    if (!confirm('모든 항목을 초기화할까요?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    buildSlots(6);
+    slotCountInput.value = 6;
+    renderInputs();
+    drawWheel();
+    resultBox.className = 'result-box';
+  });
+
+  btnSpin.addEventListener('click', spin);
+
+  btnLoadPreset.addEventListener('click', () => {
+    const key = presetSelect.value;
+    if (!key) { alert('예제를 먼저 선택해주세요.'); return; }
+    const preset = PRESETS[key];
+    if (!preset) return;
+    buildSlots(preset.items.length, preset.items);
+    slotCountInput.value = preset.items.length;
+    renderInputs();
+    drawWheel();
+    resultBox.className = 'result-box';
+    showMsg(`✔ "${preset.title}" 불러왔어요!`);
+    presetSelect.value = '';
+    if (isMobile()) openSheet();
+  });
+
+  /* ── 리사이즈: 모바일↔데스크탑 전환 시 시트 상태 정리 ── */
+  let resizeTimer;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      resizeCanvas();
+      if (!isMobile()) {
+        backdrop.classList.remove('visible');
+        document.body.style.overflow = '';
+      }
+    }, 100);
+  });
+
+  /* ── 초기 로드 ── */
+  (function init() {
+    const saved = loadData();
+    if (saved) {
+      slotCountInput.value = saved.count;
+      buildSlots(saved.count, saved.labels);
+    } else {
+      buildSlots(6);
+    }
+    renderInputs();
+    resizeCanvas();
+  })();
+</script>
+
+</body>
+</html>

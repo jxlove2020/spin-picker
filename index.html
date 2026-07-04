@@ -426,27 +426,29 @@
        데스크탑 (741px+)
     ════════════════════════════════ */
     @media (min-width: 741px) {
-      header { padding: 18px 32px; }
-      header .logo { font-size: 28px; }
-      header h1 { font-size: 22px; }
-      header h1 span { font-size: 13px; }
+      header { padding: 16px 32px; }
+      header .logo { font-size: 26px; }
+      header h1 { font-size: 20px; }
+      header h1 span { font-size: 12px; }
 
       .app {
         flex-direction: row;
-        align-items: flex-start;
-        gap: 32px;
-        padding: 32px;   /* 바텀시트 여백 제거 */
+        align-items: stretch;
+        gap: 28px;
+        padding: 24px 32px;
+        /* 뷰포트 채우되 최대 940px (헤더 ~60px 포함 시 총 1000px) */
+        height: calc(100vh - 60px);
+        max-height: 940px;
+        overflow: hidden;
       }
 
-      /* 사이드 패널로 전환 */
       .backdrop { display: none !important; }
 
       .settings-section {
-        position: static;        /* fixed 해제 */
+        position: static;
         transform: none !important;
         transition: none;
-        max-height: none;
-        width: 320px;
+        width: 300px;
         flex-shrink: 0;
         background: var(--panel-bg);
         border: 1px solid var(--panel-border);
@@ -454,48 +456,41 @@
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         order: -1;
-        /* 항상 열린 상태 */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
       }
 
-      /* 핸들 바 → 패널 헤더로 */
       .sheet-handle-bar {
         cursor: default;
-        padding: 22px 24px 16px;
+        padding: 20px 22px 14px;
         flex-direction: row;
         justify-content: flex-start;
-        gap: 8px;
+        flex-shrink: 0;
       }
 
       .handle-pill { display: none; }
-
-      .sheet-title-row {
-        justify-content: flex-start;
-        gap: 0;
-      }
-
-      .sheet-title {
-        font-size: 16px;
-      }
-
+      .sheet-title-row { justify-content: flex-start; }
+      .sheet-title { font-size: 15px; }
       .sheet-arrow { display: none; }
 
+      /* 패널 내용은 내부 스크롤 */
       .panel {
-        padding: 0 24px 22px;
-        overflow: visible;
+        flex: 1;
+        overflow-y: auto;
+        padding: 0 22px 20px;
       }
 
       .wheel-section {
         flex: 1;
+        min-width: 0;
         padding: 0;
-        padding-top: 4px;
+        justify-content: center;
+        overflow: hidden;
       }
 
-      .btn-spin {
-        max-width: 460px;
-      }
-
-      .result-box { max-width: 460px; }
-
+      .btn-spin { max-width: 420px; }
+      .result-box { max-width: 420px; }
       .btn-spin:hover { transform: scale(1.03); box-shadow: 0 6px 28px rgba(239,68,68,0.5); }
     }
   </style>
@@ -524,13 +519,8 @@
     </div>
   </section>
 
-</div>
-
-<!-- 배경 오버레이 -->
-<div class="backdrop" id="backdrop"></div>
-
-<!-- 설정 시트 / 사이드 패널 -->
-<div class="settings-section" id="settingsSection">
+  <!-- 설정 시트 / 사이드 패널 -->
+  <div class="settings-section" id="settingsSection">
 
   <!-- 핸들 바 (모바일: 탭 트리거 / 데스크탑: 패널 헤더) -->
   <div class="sheet-handle-bar" id="sheetHandleBar">
@@ -571,7 +561,12 @@
     <div class="save-msg" id="saveMsg"></div>
 
   </div>
-</div>
+  </div><!-- /settings-section -->
+
+</div><!-- /app -->
+
+<!-- 배경 오버레이 -->
+<div class="backdrop" id="backdrop"></div>
 
 <script>
   const COLORS = [
@@ -638,10 +633,22 @@
 
   /* ── 캔버스 반응형 리사이즈 ── */
   function resizeCanvas() {
-    const desktop = !isMobile();
-    const maxSize = 460;
-    const pad = desktop ? 0 : 48;
-    const size = Math.min(Math.max(window.innerWidth - pad, 260), maxSize);
+    let size;
+
+    if (isMobile()) {
+      size = Math.min(Math.max(window.innerWidth - 48, 260), 460);
+    } else {
+      // 데스크탑: 가용 높이 기준으로 캔버스 크기 결정
+      // 헤더(60) + 앱 상하패딩(48) + 스핀버튼(52) + 결과박스(76) + 갭(56) = 292
+      const overhead = 292;
+      const maxVH  = Math.min(window.innerHeight, 1000);
+      const availH = maxVH - overhead;
+
+      // 가용 너비: 전체 - 패널(300) - 갭(28) - 앱 좌우패딩(64) - 여유(40)
+      const availW = window.innerWidth - 432;
+
+      size = Math.min(Math.max(Math.min(availH, availW), 260), 460);
+    }
 
     canvas.width  = size;
     canvas.height = size;

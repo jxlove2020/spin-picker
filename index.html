@@ -39,7 +39,7 @@
       border-bottom: 1px solid rgba(255,255,255,0.1);
       position: sticky;
       top: 0;
-      z-index: 10;
+      z-index: 100;
       background: rgba(15,12,41,0.85);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
@@ -58,6 +58,81 @@
       color: rgba(255,255,255,0.4);
       font-weight: 400;
       margin-left: 6px;
+    }
+
+    /* ── 헤더 설정 메뉴 ── */
+    .header-spacer { flex: 1; }
+
+    .settings-menu-wrap {
+      position: relative;
+    }
+
+    .btn-settings {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.75);
+      font-size: 17px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .2s;
+      touch-action: manipulation;
+    }
+
+    .btn-settings:hover { background: rgba(255,255,255,0.16); }
+    .btn-settings.active { background: rgba(255,255,255,0.2); }
+
+    .settings-dropdown {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      min-width: 180px;
+      background: #1e1b4b;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 6px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      z-index: 200;
+      opacity: 0;
+      transform: translateY(-6px) scale(.97);
+      pointer-events: none;
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .settings-dropdown.open {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+      pointer-events: auto;
+    }
+
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px;
+      color: rgba(255,255,255,0.8);
+      cursor: pointer;
+      transition: background .15s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+
+    .dropdown-item:hover { background: rgba(255,255,255,0.1); }
+    .dropdown-item.danger { color: #f87171; }
+    .dropdown-item.danger:hover { background: rgba(248,113,113,0.12); }
+
+    .dropdown-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.08);
+      margin: 4px 0;
     }
 
     /* ── 앱 레이아웃 ── */
@@ -500,6 +575,15 @@
 <header>
   <div class="logo">🎡</div>
   <h1>Spin Picker <span>뽑기판</span></h1>
+  <div class="header-spacer"></div>
+  <div class="settings-menu-wrap">
+    <button class="btn-settings" id="btnSettings" title="설정">⚙️</button>
+    <div class="settings-dropdown" id="settingsDropdown">
+      <button class="dropdown-item" id="menuClearCache">🗑️ 캐시 비우기</button>
+      <div class="dropdown-divider"></div>
+      <button class="dropdown-item danger" id="menuReset">↺ 전체 초기화</button>
+    </div>
+  </div>
 </header>
 
 <div class="app">
@@ -588,21 +672,25 @@
 
   const canvas         = document.getElementById('wheelCanvas');
   const ctx            = canvas.getContext('2d');
-  const btnApply       = document.getElementById('btnApply');
-  const btnSave        = document.getElementById('btnSave');
-  const btnReset       = document.getElementById('btnReset');
-  const btnSpin        = document.getElementById('btnSpin');
-  const btnLoadPreset  = document.getElementById('btnLoadPreset');
-  const presetSelect   = document.getElementById('presetSelect');
-  const slotsList      = document.getElementById('slotsList');
-  const slotCountInput = document.getElementById('slotCount');
-  const resultBox      = document.getElementById('resultBox');
-  const resultLabel    = document.getElementById('resultLabel');
-  const resultValue    = document.getElementById('resultValue');
-  const saveMsg        = document.getElementById('saveMsg');
-  const settingsSection  = document.getElementById('settingsSection');
-  const sheetHandleBar   = document.getElementById('sheetHandleBar');
-  const backdrop         = document.getElementById('backdrop');
+  const btnApply        = document.getElementById('btnApply');
+  const btnSave         = document.getElementById('btnSave');
+  const btnReset        = document.getElementById('btnReset');
+  const btnSpin         = document.getElementById('btnSpin');
+  const btnLoadPreset   = document.getElementById('btnLoadPreset');
+  const presetSelect    = document.getElementById('presetSelect');
+  const slotsList       = document.getElementById('slotsList');
+  const slotCountInput  = document.getElementById('slotCount');
+  const resultBox       = document.getElementById('resultBox');
+  const resultLabel     = document.getElementById('resultLabel');
+  const resultValue     = document.getElementById('resultValue');
+  const saveMsg         = document.getElementById('saveMsg');
+  const settingsSection = document.getElementById('settingsSection');
+  const sheetHandleBar  = document.getElementById('sheetHandleBar');
+  const backdrop        = document.getElementById('backdrop');
+  const btnSettings     = document.getElementById('btnSettings');
+  const settingsDrop    = document.getElementById('settingsDropdown');
+  const menuClearCache  = document.getElementById('menuClearCache');
+  const menuReset       = document.getElementById('menuReset');
 
   let CX, CY, R;
   let slots = [];
@@ -835,6 +923,44 @@
   });
 
   btnSpin.addEventListener('click', spin);
+
+  /* ── 헤더 설정 메뉴 ── */
+  function toggleDropdown(e) {
+    e.stopPropagation();
+    const isOpen = settingsDrop.classList.toggle('open');
+    btnSettings.classList.toggle('active', isOpen);
+  }
+
+  function closeDropdown() {
+    settingsDrop.classList.remove('open');
+    btnSettings.classList.remove('active');
+  }
+
+  btnSettings.addEventListener('click', toggleDropdown);
+
+  document.addEventListener('click', (e) => {
+    if (!settingsDrop.contains(e.target) && e.target !== btnSettings) {
+      closeDropdown();
+    }
+  });
+
+  menuClearCache.addEventListener('click', () => {
+    closeDropdown();
+    localStorage.removeItem(STORAGE_KEY);
+    showMsg('🗑️ 캐시를 비웠어요!');
+  });
+
+  menuReset.addEventListener('click', () => {
+    closeDropdown();
+    if (!confirm('휠과 저장 데이터를 모두 초기화할까요?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    buildSlots(6);
+    slotCountInput.value = 6;
+    renderInputs();
+    drawWheel();
+    resultBox.className = 'result-box';
+    showMsg('↺ 초기화됐어요!');
+  });
 
   btnLoadPreset.addEventListener('click', () => {
     const key = presetSelect.value;

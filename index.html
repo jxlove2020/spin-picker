@@ -548,14 +548,14 @@
     <div class="count-row">
       <label>칸 수</label>
       <input type="number" id="slotCount" min="2" max="20" value="6" inputmode="numeric" />
-      <button class="btn-apply" id="btnApply">적용</button>
+      <button class="btn-apply" id="btnApply">변경</button>
     </div>
 
     <div class="section-label">항목 입력</div>
     <div class="slots-list" id="slotsList"></div>
 
     <div class="panel-actions">
-      <button class="btn-save" id="btnSave">💾 저장</button>
+      <button class="btn-save" id="btnSave">✅ 적용</button>
       <button class="btn-reset" id="btnReset">초기화</button>
     </div>
     <div class="save-msg" id="saveMsg"></div>
@@ -664,7 +664,7 @@
       count: slots.length,
       labels: slots.map(s => s.label),
     }));
-    showMsg('✔ 저장됐어요!');
+    showMsg('✔ 적용됐어요!');
   }
 
   function loadData() {

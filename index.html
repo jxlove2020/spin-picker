@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>Spin Picker · 뽑기판</title>
+  <title>뽑기판</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --peek: 62px;          /* 바텀시트 항상 보이는 높이 */
+      --peek: 62px;
       --sheet-bg: #1a1740;
       --purple: #a78bfa;
       --purple-dark: #7c3aed;
@@ -27,6 +27,11 @@
       flex-direction: column;
       align-items: center;
       -webkit-tap-highlight-color: transparent;
+      transition: background-color .5s;
+    }
+
+    body.mode-pinball {
+      background: linear-gradient(150deg, #0a0f2e 0%, #1a2660 50%, #0f1a3d 100%);
     }
 
     /* ── 헤더 ── */
@@ -40,56 +45,72 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(15,12,41,0.85);
+      background: rgba(15,12,41,0.88);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
     }
 
-    .logo { font-size: 24px; }
-
-    header h1 {
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    header h1 span {
-      font-size: 12px;
-      color: rgba(255,255,255,0.4);
-      font-weight: 400;
-      margin-left: 6px;
-    }
-
-    /* ── 헤더 설정 메뉴 ── */
+    .logo { font-size: 24px; transition: all .3s; }
+    header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; white-space: nowrap; }
+    header h1 span { font-size: 12px; color: rgba(255,255,255,0.4); font-weight: 400; margin-left: 6px; }
     .header-spacer { flex: 1; }
 
-    .settings-menu-wrap {
-      position: relative;
+    /* ── 버전 토글 ── */
+    .version-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 20px;
+      padding: 3px;
+      gap: 1px;
+      flex-shrink: 0;
     }
 
+    .ver-btn {
+      padding: 5px 11px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.42);
+      text-decoration: none;
+      cursor: pointer;
+      transition: all .22s;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .ver-btn.active {
+      background: rgba(255,255,255,0.16);
+      color: #fff;
+      cursor: default;
+    }
+
+    .ver-btn:not(.active):hover { color: rgba(255,255,255,0.78); }
+
+    .ver-label { display: none; }
+    @media (min-width: 440px) { .ver-label { display: inline; } }
+
+    /* ── 헤더 설정 메뉴 ── */
+    .settings-menu-wrap { position: relative; }
+
     .btn-settings {
-      width: 38px;
-      height: 38px;
+      width: 38px; height: 38px;
       border-radius: 50%;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(255,255,255,0.08);
       color: rgba(255,255,255,0.75);
       font-size: 17px;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      display: flex; align-items: center; justify-content: center;
       transition: background .2s;
       touch-action: manipulation;
     }
-
     .btn-settings:hover { background: rgba(255,255,255,0.16); }
     .btn-settings.active { background: rgba(255,255,255,0.2); }
 
     .settings-dropdown {
       position: absolute;
-      top: calc(100% + 8px);
-      right: 0;
+      top: calc(100% + 8px); right: 0;
       min-width: 180px;
       background: #1e1b4b;
       border: 1px solid rgba(255,255,255,0.15);
@@ -102,38 +123,21 @@
       pointer-events: none;
       transition: opacity .18s ease, transform .18s ease;
     }
-
-    .settings-dropdown.open {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-      pointer-events: auto;
-    }
+    .settings-dropdown.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
 
     .dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      display: flex; align-items: center; gap: 10px;
       padding: 10px 12px;
       border-radius: 10px;
-      font-size: 14px;
-      color: rgba(255,255,255,0.8);
-      cursor: pointer;
-      transition: background .15s;
-      border: none;
-      background: none;
-      width: 100%;
-      text-align: left;
+      font-size: 14px; color: rgba(255,255,255,0.8);
+      cursor: pointer; transition: background .15s;
+      border: none; background: none;
+      width: 100%; text-align: left;
     }
-
     .dropdown-item:hover { background: rgba(255,255,255,0.1); }
     .dropdown-item.danger { color: #f87171; }
     .dropdown-item.danger:hover { background: rgba(248,113,113,0.12); }
-
-    .dropdown-divider {
-      height: 1px;
-      background: rgba(255,255,255,0.08);
-      margin: 4px 0;
-    }
+    .dropdown-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 4px 0; }
 
     /* ── 앱 레이아웃 ── */
     .app {
@@ -141,12 +145,11 @@
       flex-direction: column;
       width: 100%;
       max-width: 1100px;
-      /* 모바일: 바텀시트 peek만큼 하단 여백 */
       padding-bottom: var(--peek);
     }
 
-    /* ── 휠 섹션 ── */
-    .wheel-section {
+    /* ── 게임 섹션 ── */
+    .game-section {
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -154,384 +157,251 @@
       gap: 20px;
     }
 
-    .wheel-wrap {
+    .canvas-wrap {
       position: relative;
       display: inline-block;
     }
 
-    .wheel-wrap canvas {
+    .canvas-wrap canvas {
       display: block;
-      filter: drop-shadow(0 0 32px rgba(167,139,250,0.35));
       max-width: 100%;
+      transition: filter .4s;
     }
 
-    .pointer {
+    body:not(.mode-pinball) .canvas-wrap canvas {
+      filter: drop-shadow(0 0 32px rgba(167,139,250,0.35));
+    }
+    body.mode-pinball .canvas-wrap canvas {
+      border-radius: 14px;
+      filter: drop-shadow(0 0 28px rgba(96,165,250,0.3));
+    }
+
+    /* 스핀 포인터 (스핀 모드 전용) */
+    .spin-pointer {
       position: absolute;
       top: 50%;
       right: -16px;
       transform: translateY(-50%);
-      width: 0;
-      height: 0;
+      width: 0; height: 0;
       border-top: 14px solid transparent;
       border-bottom: 14px solid transparent;
       border-right: 30px solid #fff;
       filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+      transition: opacity .3s;
     }
+    body.mode-pinball .spin-pointer { opacity: 0; pointer-events: none; }
 
-    .btn-spin {
-      width: 100%;
-      max-width: 360px;
+    /* 액션 버튼 */
+    .btn-action {
+      width: 100%; max-width: 360px;
       padding: 16px 0;
       border-radius: 50px;
       border: none;
-      background: linear-gradient(135deg, #f59e0b, #ef4444);
       color: #fff;
-      font-size: 20px;
-      font-weight: 800;
+      font-size: 20px; font-weight: 800;
       letter-spacing: 1px;
       cursor: pointer;
-      transition: transform .15s, box-shadow .15s, opacity .2s;
-      box-shadow: 0 4px 20px rgba(239,68,68,0.4);
+      transition: transform .15s, box-shadow .15s, opacity .2s, background .4s;
       touch-action: manipulation;
     }
-
-    .btn-spin:active { transform: scale(.96); }
-    .btn-spin:disabled { opacity: .5; cursor: not-allowed; transform: none; }
-
-    .result-box {
-      width: 100%;
-      max-width: 360px;
-      border-radius: 16px;
-      min-height: 64px;
+    body:not(.mode-pinball) .btn-action {
+      background: linear-gradient(135deg, #f59e0b, #ef4444);
+      box-shadow: 0 4px 20px rgba(239,68,68,0.4);
     }
+    body.mode-pinball .btn-action {
+      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      box-shadow: 0 4px 20px rgba(59,130,246,0.45);
+    }
+    .btn-action:active { transform: scale(.96); }
+    .btn-action:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 
+    /* 결과 */
+    .result-box { width: 100%; max-width: 360px; border-radius: 16px; min-height: 64px; }
     .result-box.show {
       background: rgba(255,255,255,0.08);
       border: 1px solid rgba(255,255,255,0.15);
       padding: 16px 20px;
       animation: pop .35s cubic-bezier(.34,1.56,.64,1);
     }
-
-    @keyframes pop {
-      from { transform: scale(.85); opacity: 0; }
-      to   { transform: scale(1);   opacity: 1; }
-    }
-
+    @keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .result-label { font-size: 12px; color: rgba(255,255,255,0.5); margin-bottom: 4px; }
-
     .result-value {
-      font-size: 28px;
-      font-weight: 800;
-      -webkit-background-clip: text;
-      background-clip: text;
-      -webkit-text-fill-color: transparent;
-      color: transparent;
+      font-size: 28px; font-weight: 800;
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
     }
 
-    /* ════════════════════════════════
-       바텀 시트 (모바일 기본)
-    ════════════════════════════════ */
+    /* ── 바텀 시트 ── */
     .backdrop {
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background: rgba(0,0,0,0.55);
       z-index: 45;
-      opacity: 0;
-      pointer-events: none;
+      opacity: 0; pointer-events: none;
       transition: opacity .3s;
     }
-
-    .backdrop.visible {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    .backdrop.visible { opacity: 1; pointer-events: auto; }
 
     .settings-section {
       position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
+      bottom: 0; left: 0; right: 0;
       z-index: 50;
       background: var(--sheet-bg);
       border-radius: 22px 22px 0 0;
       transform: translateY(calc(100% - var(--peek)));
       transition: transform .38s cubic-bezier(.32,.72,0,1);
       max-height: 65vh;
-      display: flex;
-      flex-direction: column;
+      display: flex; flex-direction: column;
     }
+    .settings-section.open { transform: translateY(0); }
 
-    .settings-section.open {
-      transform: translateY(0);
-    }
-
-    /* 핸들 바 */
     .sheet-handle-bar {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+      display: flex; flex-direction: column; align-items: center;
       padding: 10px 20px 14px;
-      cursor: pointer;
-      user-select: none;
-      touch-action: manipulation;
+      cursor: pointer; user-select: none; touch-action: manipulation;
       flex-shrink: 0;
     }
-
-    .handle-pill {
-      width: 36px;
-      height: 4px;
-      background: rgba(255,255,255,0.22);
-      border-radius: 2px;
-      margin-bottom: 10px;
-    }
+    .handle-pill { width: 36px; height: 4px; background: rgba(255,255,255,0.22); border-radius: 2px; margin-bottom: 10px; }
 
     .btn-close-sheet {
-      display: none; /* 데스크탑에서 숨김 */
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      border: none;
+      display: none;
+      width: 28px; height: 28px;
+      border-radius: 50%; border: none;
       background: rgba(255,255,255,0.1);
       color: rgba(255,255,255,0.6);
-      font-size: 14px;
-      cursor: pointer;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      touch-action: manipulation;
+      font-size: 14px; cursor: pointer;
+      align-items: center; justify-content: center;
+      flex-shrink: 0; touch-action: manipulation;
     }
+    @media (max-width: 740px) { .btn-close-sheet { display: flex; } }
 
-    @media (max-width: 740px) {
-      .btn-close-sheet { display: flex; }
-    }
+    .sheet-title-row { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+    .sheet-title { font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.88); display: flex; align-items: center; gap: 7px; }
+    .sheet-arrow { font-size: 13px; color: rgba(255,255,255,0.4); transition: transform .35s; }
+    .settings-section.open .sheet-arrow { transform: rotate(180deg); }
 
-    .sheet-title-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      width: 100%;
-    }
-
-    .sheet-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.88);
-      display: flex;
-      align-items: center;
-      gap: 7px;
-    }
-
-    .sheet-arrow {
-      font-size: 13px;
-      color: rgba(255,255,255,0.4);
-      transition: transform .35s;
-    }
-
-    .settings-section.open .sheet-arrow {
-      transform: rotate(180deg);
-    }
-
-    /* 패널 내용 영역 */
     .panel {
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       flex: 1;
       padding: 4px 20px calc(24px + env(safe-area-inset-bottom));
     }
-
     .panel::-webkit-scrollbar { width: 3px; }
     .panel::-webkit-scrollbar-track { background: transparent; }
     .panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
 
-    /* ── 폼 요소 ── */
+    /* ── 폼 ── */
     .section-label {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 11px; font-weight: 600;
       letter-spacing: .8px;
       color: rgba(255,255,255,0.38);
       text-transform: uppercase;
       margin-bottom: 8px;
     }
-
-    .preset-row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
+    .preset-row { display: flex; gap: 8px; margin-bottom: 16px; }
     .preset-select {
-      flex: 1;
-      min-width: 0;
+      flex: 1; min-width: 0;
       padding: 12px 32px 12px 12px;
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(255,255,255,0.1);
-      color: #fff;
-      font-size: 14px;
-      outline: none;
-      cursor: pointer;
-      appearance: none;
-      -webkit-appearance: none;
+      color: #fff; font-size: 14px;
+      outline: none; cursor: pointer;
+      appearance: none; -webkit-appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 10px center;
     }
-
     .preset-select:focus { border-color: var(--purple); }
     .preset-select option { background: #1a1740; color: #fff; }
-
     .btn-load-preset {
       padding: 12px 14px;
-      border-radius: 12px;
-      border: none;
+      border-radius: 12px; border: none;
       background: linear-gradient(135deg, #10b981, #06b6d4);
-      color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-      touch-action: manipulation;
+      color: #fff; font-size: 14px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; touch-action: manipulation;
     }
-
-    .divider {
-      height: 1px;
-      background: rgba(255,255,255,0.08);
-      margin: 12px 0 16px;
-    }
-
-    .count-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-
-    .count-row label {
-      font-size: 14px;
-      color: rgba(255,255,255,0.65);
-      white-space: nowrap;
-    }
-
+    .divider { height: 1px; background: rgba(255,255,255,0.08); margin: 12px 0 16px; }
+    .count-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .count-row label { font-size: 14px; color: rgba(255,255,255,0.65); white-space: nowrap; }
     .count-row input[type="number"] {
-      width: 72px;
-      padding: 10px 12px;
+      width: 72px; padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(255,255,255,0.1);
-      color: #fff;
-      font-size: 16px;
-      text-align: center;
-      outline: none;
+      color: #fff; font-size: 16px; text-align: center; outline: none;
     }
-
     .count-row input[type="number"]:focus { border-color: var(--purple); }
-
     .btn-apply {
       padding: 10px 18px;
-      border-radius: 10px;
-      border: none;
+      border-radius: 10px; border: none;
       background: linear-gradient(135deg, var(--purple-dark), var(--purple));
-      color: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      touch-action: manipulation;
+      color: #fff; font-size: 14px; font-weight: 600;
+      cursor: pointer; touch-action: manipulation;
     }
-
-    .slots-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .slot-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .slot-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      flex-shrink: 0;
-    }
-
+    .slots-list { display: flex; flex-direction: column; gap: 8px; }
+    .slot-item { display: flex; align-items: center; gap: 8px; }
+    .slot-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
     .slot-item input[type="text"] {
-      flex: 1;
-      min-width: 0;
-      padding: 12px 12px;
-      border-radius: 10px;
+      flex: 1; min-width: 0;
+      padding: 12px; border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.15);
       background: rgba(255,255,255,0.08);
-      color: #fff;
-      font-size: 15px;
-      outline: none;
+      color: #fff; font-size: 15px; outline: none;
     }
-
-    .slot-item input[type="text"]:focus {
-      border-color: var(--purple);
-      background: rgba(255,255,255,0.12);
-    }
-
+    .slot-item input[type="text"]:focus { border-color: var(--purple); background: rgba(255,255,255,0.12); }
     .slot-item input[type="text"]::placeholder { color: rgba(255,255,255,0.3); }
-
-    .panel-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 16px;
-    }
-
+    .panel-actions { display: flex; gap: 8px; margin-top: 16px; }
     .btn-save {
-      flex: 1;
-      padding: 14px;
-      border-radius: 12px;
-      border: none;
+      flex: 1; padding: 14px;
+      border-radius: 12px; border: none;
       background: linear-gradient(135deg, #06b6d4, #3b82f6);
-      color: #fff;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      touch-action: manipulation;
+      color: #fff; font-size: 15px; font-weight: 700;
+      cursor: pointer; touch-action: manipulation;
     }
-
     .btn-save:active { opacity: .85; }
-
     .btn-reset {
       padding: 14px 16px;
       border-radius: 12px;
       border: 1px solid rgba(255,255,255,0.18);
       background: rgba(255,255,255,0.06);
       color: rgba(255,255,255,0.6);
-      font-size: 15px;
-      cursor: pointer;
+      font-size: 15px; cursor: pointer; touch-action: manipulation;
+    }
+    .save-msg { font-size: 12px; color: #34d399; text-align: center; margin-top: 10px; min-height: 18px; transition: opacity .4s; }
+
+    /* ── 맵 선택 (핀볼 전용) ── */
+    .map-section { display: none; }
+    body.mode-pinball .map-section { display: block; }
+
+    .map-toggle { display: flex; gap: 6px; margin-bottom: 0; }
+
+    .map-btn {
+      flex: 1; padding: 9px 4px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.13);
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.48);
+      font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all .2s;
       touch-action: manipulation;
     }
-
-    .save-msg {
-      font-size: 12px;
-      color: #34d399;
-      text-align: center;
-      margin-top: 10px;
-      min-height: 18px;
-      transition: opacity .4s;
+    .map-btn.active {
+      background: rgba(167,139,250,0.18);
+      border-color: rgba(167,139,250,0.5);
+      color: #d8b4fe;
     }
+    .map-btn:not(.active):hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
 
-    /* ════════════════════════════════
-       데스크탑 (741px+)
-    ════════════════════════════════ */
+    /* ── 데스크탑 ── */
     @media (min-width: 741px) {
       header { padding: 16px 32px; }
       header .logo { font-size: 26px; }
       header h1 { font-size: 20px; }
-      header h1 span { font-size: 12px; }
 
       .app {
-        flex-direction: row;
-        align-items: stretch;
+        flex-direction: row; align-items: stretch;
         gap: 28px;
         padding: 24px 32px;
-        /* 뷰포트 채우되 최대 940px (헤더 ~60px 포함 시 총 1000px) */
         height: calc(100vh - 60px);
         max-height: 940px;
         overflow: hidden;
@@ -541,61 +411,41 @@
 
       .settings-section {
         position: static;
-        transform: none !important;
-        transition: none;
-        width: 300px;
-        flex-shrink: 0;
+        transform: none !important; transition: none;
+        width: 300px; flex-shrink: 0;
         background: var(--panel-bg);
         border: 1px solid var(--panel-border);
         border-radius: var(--radius);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
         order: -1;
-        display: flex;
-        flex-direction: column;
+        display: flex; flex-direction: column;
         overflow: hidden;
       }
 
-      .sheet-handle-bar {
-        cursor: default;
-        padding: 20px 22px 14px;
-        flex-direction: row;
-        justify-content: flex-start;
-        flex-shrink: 0;
-      }
-
+      .sheet-handle-bar { cursor: default; padding: 20px 22px 14px; flex-direction: row; justify-content: flex-start; flex-shrink: 0; }
       .handle-pill { display: none; }
       .sheet-title-row { justify-content: flex-start; }
-      .sheet-title { font-size: 15px; }
       .sheet-arrow { display: none; }
+      .panel { flex: 1; overflow-y: auto; padding: 0 22px 20px; }
 
-      /* 패널 내용은 내부 스크롤 */
-      .panel {
-        flex: 1;
-        overflow-y: auto;
-        padding: 0 22px 20px;
-      }
-
-      .wheel-section {
-        flex: 1;
-        min-width: 0;
-        padding: 0;
-        justify-content: center;
-        overflow: hidden;
-      }
-
-      .btn-spin { max-width: 420px; }
+      .game-section { flex: 1; min-width: 0; padding: 0; justify-content: center; overflow: hidden; }
+      .btn-action { max-width: 420px; }
       .result-box { max-width: 420px; }
-      .btn-spin:hover { transform: scale(1.03); box-shadow: 0 6px 28px rgba(239,68,68,0.5); }
+      .btn-action:hover { transform: scale(1.03); }
     }
   </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">🎡</div>
-  <h1>Spin Picker <span>뽑기판</span></h1>
+  <div class="logo" id="logo">🎡</div>
+  <h1 id="titleMain">Spin Picker <span id="titleSub">뽑기판</span></h1>
   <div class="header-spacer"></div>
+  <div class="version-toggle">
+    <span class="ver-btn active" id="verSpin" role="button" tabindex="0">🎡 <span class="ver-label">Spin</span></span>
+    <span class="ver-btn" id="verPinball" role="button" tabindex="0">🎰 <span class="ver-label">Pinball</span></span>
+  </div>
   <div class="settings-menu-wrap">
     <button class="btn-settings" id="btnSettings" title="설정">⚙️</button>
     <div class="settings-dropdown" id="settingsDropdown">
@@ -607,72 +457,70 @@
 </header>
 
 <div class="app">
-
-  <!-- 휠 섹션 -->
-  <section class="wheel-section">
-    <div class="wheel-wrap">
-      <canvas id="wheelCanvas"></canvas>
-      <div class="pointer"></div>
+  <section class="game-section">
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="mainCanvas"></canvas>
+      <div class="spin-pointer" id="spinPointer"></div>
     </div>
-
-    <button class="btn-spin" id="btnSpin">▶ 돌리기!</button>
-
+    <button class="btn-action" id="btnAction">▶ 돌리기!</button>
     <div class="result-box" id="resultBox">
       <div class="result-label" id="resultLabel"></div>
       <div class="result-value" id="resultValue"></div>
     </div>
   </section>
 
-  <!-- 설정 시트 / 사이드 패널 -->
   <div class="settings-section" id="settingsSection">
-
-  <!-- 핸들 바 (모바일: 탭 트리거 / 데스크탑: 패널 헤더) -->
-  <div class="sheet-handle-bar" id="sheetHandleBar">
-    <div class="handle-pill"></div>
-    <div class="sheet-title-row">
-      <span class="sheet-title">⚙️ 뽑기 설정</span>
-      <button class="btn-close-sheet" id="btnCloseSheet">✕</button>
+    <div class="sheet-handle-bar" id="sheetHandleBar">
+      <div class="handle-pill"></div>
+      <div class="sheet-title-row">
+        <span class="sheet-title">⚙️ 뽑기 설정</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="sheet-arrow">▾</span>
+          <button class="btn-close-sheet" id="btnCloseSheet">✕</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="section-label">📋 예제 불러오기</div>
+      <div class="preset-row">
+        <select class="preset-select" id="presetSelect">
+          <option value="">-- 예제 선택 --</option>
+          <option value="church_food">🍽️ 교회근처 식당</option>
+        </select>
+        <button class="btn-load-preset" id="btnLoadPreset">불러오기</button>
+      </div>
+      <div class="map-section">
+        <div class="section-label">🗺️ 보드 맵</div>
+        <div class="map-toggle">
+          <button class="map-btn active" data-map="classic">🎯 클래식</button>
+          <button class="map-btn" data-map="random">🎲 랜덤</button>
+          <button class="map-btn" data-map="bumper">💥 범퍼</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="section-label">칸 수 설정</div>
+      <div class="count-row">
+        <label>칸 수</label>
+        <input type="number" id="slotCount" min="2" max="20" value="6" inputmode="numeric" />
+        <button class="btn-apply" id="btnApply">변경</button>
+      </div>
+      <div class="section-label">항목 입력</div>
+      <div class="slots-list" id="slotsList"></div>
+      <div class="panel-actions">
+        <button class="btn-save" id="btnSave">✅ 적용</button>
+        <button class="btn-reset" id="btnReset">초기화</button>
+      </div>
+      <div class="save-msg" id="saveMsg"></div>
     </div>
   </div>
+</div>
 
-  <div class="panel">
-
-    <div class="section-label">📋 예제 불러오기</div>
-    <div class="preset-row">
-      <select class="preset-select" id="presetSelect">
-        <option value="">-- 예제 선택 --</option>
-        <option value="church_food">🍽️ 교회근처 식당</option>
-      </select>
-      <button class="btn-load-preset" id="btnLoadPreset">불러오기</button>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="section-label">칸 수 설정</div>
-    <div class="count-row">
-      <label>칸 수</label>
-      <input type="number" id="slotCount" min="2" max="20" value="6" inputmode="numeric" />
-      <button class="btn-apply" id="btnApply">변경</button>
-    </div>
-
-    <div class="section-label">항목 입력</div>
-    <div class="slots-list" id="slotsList"></div>
-
-    <div class="panel-actions">
-      <button class="btn-save" id="btnSave">✅ 적용</button>
-      <button class="btn-reset" id="btnReset">초기화</button>
-    </div>
-    <div class="save-msg" id="saveMsg"></div>
-
-  </div>
-  </div><!-- /settings-section -->
-
-</div><!-- /app -->
-
-<!-- 배경 오버레이 -->
 <div class="backdrop" id="backdrop"></div>
 
 <script>
+  /* ════════════════════════════
+     상수
+  ════════════════════════════ */
   const COLORS = [
     '#FF6B6B','#FF8E53','#FFC857','#2EC4B6',
     '#3A86FF','#8338EC','#FF006E','#06D6A0',
@@ -681,7 +529,7 @@
     '#F3722C','#90BE6D','#577590','#277DA1',
   ];
 
-  const STORAGE_KEY = 'spin-picker-data';
+  const STORAGE_KEY = 'picker-data';
 
   const PRESETS = {
     church_food: {
@@ -690,139 +538,192 @@
     },
   };
 
-  const canvas         = document.getElementById('wheelCanvas');
-  const ctx            = canvas.getContext('2d');
-  const btnApply        = document.getElementById('btnApply');
-  const btnSave         = document.getElementById('btnSave');
-  const btnReset        = document.getElementById('btnReset');
-  const btnSpin         = document.getElementById('btnSpin');
-  const btnLoadPreset   = document.getElementById('btnLoadPreset');
-  const presetSelect    = document.getElementById('presetSelect');
-  const slotsList       = document.getElementById('slotsList');
-  const slotCountInput  = document.getElementById('slotCount');
-  const resultBox       = document.getElementById('resultBox');
-  const resultLabel     = document.getElementById('resultLabel');
-  const resultValue     = document.getElementById('resultValue');
-  const saveMsg         = document.getElementById('saveMsg');
-  const settingsSection = document.getElementById('settingsSection');
-  const sheetHandleBar  = document.getElementById('sheetHandleBar');
-  const backdrop        = document.getElementById('backdrop');
-  const btnSettings     = document.getElementById('btnSettings');
-  const settingsDrop    = document.getElementById('settingsDropdown');
-  const menuClearCache  = document.getElementById('menuClearCache');
-  const menuReset       = document.getElementById('menuReset');
-  const btnCloseSheet   = document.getElementById('btnCloseSheet');
+  /* 핀볼 물리 상수 */
+  const GRAVITY      = 0.12;
+  const RESTITUTION  = 0.72;
+  const FRICTION_X   = 0.992;
+  const MAX_SPEED    = 6;
+  const NUM_PEG_ROWS = 9;
+  const SLOT_H_RATIO = 0.20;
 
+  /* ════════════════════════════
+     DOM
+  ════════════════════════════ */
+  const canvas         = document.getElementById('mainCanvas');
+  const ctx            = canvas.getContext('2d');
+  const logo           = document.getElementById('logo');
+  const titleMain      = document.getElementById('titleMain');
+  const titleSub       = document.getElementById('titleSub');
+  const verSpin        = document.getElementById('verSpin');
+  const verPinball     = document.getElementById('verPinball');
+  const spinPointer    = document.getElementById('spinPointer');
+  const btnAction      = document.getElementById('btnAction');
+  const btnApply       = document.getElementById('btnApply');
+  const btnSave        = document.getElementById('btnSave');
+  const btnReset       = document.getElementById('btnReset');
+  const btnLoadPreset  = document.getElementById('btnLoadPreset');
+  const presetSelect   = document.getElementById('presetSelect');
+  const slotsList      = document.getElementById('slotsList');
+  const slotCountInput = document.getElementById('slotCount');
+  const resultBox      = document.getElementById('resultBox');
+  const resultLabel    = document.getElementById('resultLabel');
+  const resultValue    = document.getElementById('resultValue');
+  const saveMsg        = document.getElementById('saveMsg');
+  const settingsSection= document.getElementById('settingsSection');
+  const sheetHandleBar = document.getElementById('sheetHandleBar');
+  const backdrop       = document.getElementById('backdrop');
+  const btnSettings    = document.getElementById('btnSettings');
+  const settingsDrop   = document.getElementById('settingsDropdown');
+  const menuClearCache = document.getElementById('menuClearCache');
+  const menuReset      = document.getElementById('menuReset');
+  const btnCloseSheet  = document.getElementById('btnCloseSheet');
+
+  /* ════════════════════════════
+     상태
+  ════════════════════════════ */
+  let mode    = 'spin'; // 'spin' | 'pinball'
+  let W, H;
+  let slots   = [];
+  let animFrame = null;
+
+  /* 스핀 상태 */
   let CX, CY, R;
-  let slots = [];
   let currentAngle = 0;
   let spinning = false;
 
-  /* ── 바텀시트 열기 / 닫기 ── */
-  function isMobile() { return window.innerWidth < 741; }
+  /* 핀볼 상태 */
+  let BALL_R, PEG_R, MARGIN;
+  let currentMap = 'classic'; // 'classic' | 'random' | 'bumper'
+  let pegs       = [];
+  let ball       = null;
+  let ballTrail  = [];
+  let particles  = [];
+  let hitPegs    = new Map();
+  let winnerGlow = null;
+  let dropping   = false;
 
-  function openSheet() {
-    settingsSection.classList.add('open');
-    backdrop.classList.add('visible');
-    document.body.style.overflow = 'hidden';
-  }
+  /* ════════════════════════════
+     모드 전환
+  ════════════════════════════ */
+  function setMode(newMode) {
+    if (mode === newMode) return;
 
-  function closeSheet() {
-    settingsSection.classList.remove('open');
-    backdrop.classList.remove('visible');
-    document.body.style.overflow = '';
-  }
+    /* 진행 중인 애니메이션 중단 */
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+    spinning = dropping = false;
+    ball = null; ballTrail = []; particles = [];
+    btnAction.disabled = false;
+    resultBox.className = 'result-box';
 
-  sheetHandleBar.addEventListener('click', () => {
-    if (!isMobile()) return;
-    settingsSection.classList.contains('open') ? closeSheet() : openSheet();
-  });
+    mode = newMode;
+    saveData();
 
-  backdrop.addEventListener('click', closeSheet);
-  btnCloseSheet.addEventListener('click', (e) => { e.stopPropagation(); closeSheet(); });
+    /* UI 업데이트 */
+    const isPinball = mode === 'pinball';
+    document.body.classList.toggle('mode-pinball', isPinball);
+    verSpin.classList.toggle('active', !isPinball);
+    verPinball.classList.toggle('active', isPinball);
 
-  /* ── 캔버스 반응형 리사이즈 ── */
-  function resizeCanvas() {
-    let size;
+    logo.textContent      = isPinball ? '🎰' : '🎡';
+    titleMain.childNodes[0].textContent = isPinball ? 'Pinball Picker ' : 'Spin Picker ';
+    titleSub.textContent  = isPinball ? '핀볼 뽑기' : '뽑기판';
+    btnAction.textContent = isPinball ? '▼ 공 떨어뜨리기!' : '▶ 돌리기!';
+    document.title        = isPinball ? 'Pinball Picker · 핀볼 뽑기' : 'Spin Picker · 뽑기판';
 
-    if (isMobile()) {
-      size = Math.min(Math.max(window.innerWidth - 48, 260), 460);
-    } else {
-      // 데스크탑: 가용 높이 기준으로 캔버스 크기 결정
-      // 헤더(60) + 앱 상하패딩(48) + 스핀버튼(52) + 결과박스(76) + 갭(56) = 292
-      const overhead = 292;
-      const maxVH  = Math.min(window.innerHeight, 1000);
-      const availH = maxVH - overhead;
-
-      // 가용 너비: 전체 - 패널(300) - 갭(28) - 앱 좌우패딩(64) - 여유(40)
-      const availW = window.innerWidth - 432;
-
-      size = Math.min(Math.max(Math.min(availH, availW), 260), 460);
+    /* 핀볼 모드에서는 슬롯 수 최대 10 */
+    slotCountInput.max = isPinball ? 10 : 20;
+    if (isPinball && slots.length > 10) {
+      buildSlots(10, slots.map(s => s.label).slice(0, 10));
+      slotCountInput.value = 10;
+      renderInputs();
     }
 
-    canvas.width  = size;
-    canvas.height = size;
-    CX = size / 2;
-    CY = size / 2;
-    R  = CX - 20;
-    drawWheel();
+    resizeCanvas();
   }
 
-  /* ── 저장 ── */
-  function saveData() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      count: slots.length,
-      labels: slots.map(s => s.label),
-    }));
-    showMsg('✔ 적용됐어요!');
-  }
+  verSpin.addEventListener('click', () => setMode('spin'));
+  verPinball.addEventListener('click', () => setMode('pinball'));
+  verSpin.addEventListener('keydown', e => e.key === 'Enter' && setMode('spin'));
+  verPinball.addEventListener('keydown', e => e.key === 'Enter' && setMode('pinball'));
 
-  function loadData() {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
-  }
-
-  function showMsg(text) {
-    saveMsg.textContent = text;
-    saveMsg.style.opacity = '1';
-    clearTimeout(showMsg._t);
-    showMsg._t = setTimeout(() => { saveMsg.style.opacity = '0'; }, 2400);
-  }
-
-  /* ── 슬롯 ── */
-  function buildSlots(count, labels = []) {
-    slots = Array.from({ length: count }, (_, i) => ({
-      label: labels[i] ?? '',
-      color: COLORS[i % COLORS.length],
-    }));
-  }
-
-  function renderInputs() {
-    slotsList.innerHTML = '';
-    slots.forEach((s, i) => {
-      const item = document.createElement('div');
-      item.className = 'slot-item';
-
-      const dot = document.createElement('div');
-      dot.className = 'slot-dot';
-      dot.style.background = s.color;
-
-      const inp = document.createElement('input');
-      inp.type = 'text';
-      inp.placeholder = `항목 ${i + 1}`;
-      inp.value = s.label;
-      inp.addEventListener('input', () => { slots[i].label = inp.value; drawWheel(); });
-
-      item.append(dot, inp);
-      slotsList.appendChild(item);
+  /* 맵 버튼 */
+  document.querySelectorAll('.map-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (dropping) return;
+      document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMap = btn.dataset.map;
+      buildPegs(); drawBoard();
     });
+  });
+
+  /* ════════════════════════════
+     바텀 시트
+  ════════════════════════════ */
+  function isMobile() { return window.innerWidth < 741; }
+  function openSheet() { settingsSection.classList.add('open'); backdrop.classList.add('visible'); document.body.style.overflow = 'hidden'; }
+  function closeSheet() { settingsSection.classList.remove('open'); backdrop.classList.remove('visible'); document.body.style.overflow = ''; }
+
+  sheetHandleBar.addEventListener('click', () => { if (!isMobile()) return; settingsSection.classList.contains('open') ? closeSheet() : openSheet(); });
+  backdrop.addEventListener('click', closeSheet);
+  btnCloseSheet.addEventListener('click', e => { e.stopPropagation(); closeSheet(); });
+
+  /* ════════════════════════════
+     캔버스 리사이즈
+  ════════════════════════════ */
+  function resizeCanvas() {
+    let cw, ch;
+    if (mode === 'spin') {
+      if (isMobile()) {
+        cw = Math.min(Math.max(window.innerWidth - 48, 260), 460);
+      } else {
+        const availH = Math.min(window.innerHeight, 1000) - 292;
+        const availW = window.innerWidth - 432;
+        cw = Math.min(Math.max(Math.min(availH, availW), 260), 460);
+      }
+      ch = cw;
+    } else {
+      if (isMobile()) {
+        cw = Math.min(Math.max(window.innerWidth - 40, 260), 400);
+        ch = Math.round(cw * 1.55);
+      } else {
+        const availH = Math.min(window.innerHeight, 1000) - 300;
+        const availW = window.innerWidth - 432;
+        ch = Math.min(Math.max(Math.min(availH, Math.round(availW * 1.55)), 320), 620);
+        cw = Math.round(ch / 1.55);
+      }
+    }
+    canvas.width  = cw;
+    canvas.height = ch;
+    W = cw; H = ch;
+
+    if (mode === 'spin') {
+      CX = W / 2; CY = H / 2; R = CX - 20;
+    } else {
+      MARGIN = Math.round(W * 0.055);
+      const usableW = W - MARGIN * 2;
+      const slotW   = usableW / Math.max(1, slots.length);
+      BALL_R = Math.max(4, Math.min(11, Math.floor(slotW / 5.5)));
+      PEG_R  = Math.max(3, Math.round(BALL_R * 0.60));
+      buildPegs();
+    }
+    drawBoard();
   }
 
-  /* ── 휠 그리기 ── */
+  /* ════════════════════════════
+     공통 그리기 진입점
+  ════════════════════════════ */
+  function drawBoard() {
+    if (mode === 'spin') drawWheel();
+    else drawPinball();
+  }
+
+  /* ════════════════════════════
+     ── SPIN: 휠 그리기 ──
+  ════════════════════════════ */
   function drawWheel() {
     if (!CX) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, W, H);
     if (!slots.length) return;
 
     const arc = (Math.PI * 2) / slots.length;
@@ -842,7 +743,6 @@
       ctx.closePath();
       ctx.fillStyle = s.color;
       ctx.fill();
-
       ctx.strokeStyle = 'rgba(255,255,255,0.2)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
@@ -854,7 +754,7 @@
       ctx.fillStyle = '#fff';
       const label = s.label || `항목 ${i + 1}`;
       const fontSize = Math.min(16, Math.max(9, Math.floor(R * arc / (label.length * 1.3 + 1))));
-      ctx.font = `bold ${fontSize}px 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif`;
+      ctx.font = `bold ${fontSize}px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
       ctx.shadowColor = 'rgba(0,0,0,0.6)';
       ctx.shadowBlur  = 3;
       ctx.fillText(label, R - 10, fontSize / 3, R - 28);
@@ -871,20 +771,19 @@
     ctx.shadowBlur = 8;
     ctx.fill();
     ctx.shadowBlur = 0;
-
     ctx.font = `${Math.max(16, Math.floor(R * 0.12))}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('🎯', CX, CY);
   }
 
-  /* ── 스핀 ── */
+  /* ── SPIN: 회전 애니메이션 ── */
   function easeOut(t) { return 1 - Math.pow(1 - t, 4); }
 
   function spin() {
     if (spinning || !slots.length) return;
     spinning = true;
-    btnSpin.disabled = true;
+    btnAction.disabled = true;
     resultBox.className = 'result-box';
 
     const totalRot = Math.PI * 2 * (5 + Math.random() * 5);
@@ -897,24 +796,340 @@
       currentAngle = start + totalRot * easeOut(progress);
       drawWheel();
       if (progress < 1) {
-        requestAnimationFrame(frame);
+        animFrame = requestAnimationFrame(frame);
       } else {
+        animFrame = null;
         spinning = false;
-        btnSpin.disabled = false;
-        showResult();
+        btnAction.disabled = false;
+        showSpinResult();
       }
     }
-    requestAnimationFrame(frame);
+    animFrame = requestAnimationFrame(frame);
   }
 
-  /* ── 결과 ── */
-  function showResult() {
+  function showSpinResult() {
     const arc = (Math.PI * 2) / slots.length;
     const normalized = ((-(currentAngle - Math.PI / 2)) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     const index  = Math.floor(normalized / arc) % slots.length;
-    const winner = slots[index];
-    const label  = winner.label.trim() || `항목 ${index + 1}`;
+    showResult(index);
+  }
 
+  /* ════════════════════════════
+     ── PINBALL: 페그 배치 ──
+  ════════════════════════════ */
+  function buildPegs() {
+    pegs = [];
+    if (!slots.length) return;
+    if      (currentMap === 'random') buildRandomPegs();
+    else if (currentMap === 'bumper') buildBumperPegs();
+    else                               buildClassicPegs();
+  }
+
+  function buildClassicPegs() {
+    const N = slots.length;
+    const slotH  = Math.round(H * SLOT_H_RATIO);
+    const usableW = W - MARGIN * 2;
+    const slotW   = usableW / N;
+    const areaTop = 32, areaBot = H - slotH - 12;
+    const rowH    = (areaBot - areaTop) / (NUM_PEG_ROWS - 1);
+    for (let row = 0; row < NUM_PEG_ROWS; row++) {
+      const y = areaTop + row * rowH;
+      if (row % 2 === 0) {
+        for (let col = 0; col < N; col++)   pegs.push({ x: MARGIN + slotW*(col+0.5), y, type:'normal' });
+      } else {
+        for (let col = 0; col < N-1; col++) pegs.push({ x: MARGIN + slotW*(col+1),   y, type:'normal' });
+      }
+    }
+  }
+
+  function buildRandomPegs() {
+    const N = slots.length;
+    const slotH  = Math.round(H * SLOT_H_RATIO);
+    const usableW = W - MARGIN * 2;
+    const areaTop = 40, areaBot = H - slotH - 20;
+    const target  = N * 4;
+    const minGap  = (BALL_R + PEG_R) * 2.8;
+    let tries = 0;
+    while (pegs.length < target && tries < 900) {
+      tries++;
+      const x = MARGIN + minGap + Math.random() * (usableW - minGap * 2);
+      const y = areaTop + Math.random() * (areaBot - areaTop);
+      if (pegs.every(p => Math.hypot(p.x-x, p.y-y) >= minGap))
+        pegs.push({ x, y, type: 'normal' });
+    }
+  }
+
+  function buildBumperPegs() {
+    /* 클래식 절반 행 + 범퍼 3개 */
+    const N = slots.length;
+    const slotH  = Math.round(H * SLOT_H_RATIO);
+    const usableW = W - MARGIN * 2;
+    const slotW   = usableW / N;
+    const areaTop = 32, areaBot = H - slotH - 12;
+    const rows = Math.ceil(NUM_PEG_ROWS / 2);
+    const rowH = (areaBot - areaTop) / (rows - 1);
+    for (let row = 0; row < rows; row++) {
+      const y = areaTop + row * rowH;
+      if (row % 2 === 0) {
+        for (let col = 0; col < N; col++)   pegs.push({ x: MARGIN + slotW*(col+0.5), y, type:'normal' });
+      } else {
+        for (let col = 0; col < N-1; col++) pegs.push({ x: MARGIN + slotW*(col+1),   y, type:'normal' });
+      }
+    }
+    const midY  = areaTop + (areaBot - areaTop) * 0.58;
+    const cx    = W / 2;
+    const bOff  = usableW * 0.22;
+    pegs.push({ x: cx,        y: midY - (areaBot-areaTop)*0.14, type:'bumper' });
+    pegs.push({ x: cx-bOff,   y: midY + (areaBot-areaTop)*0.1,  type:'bumper' });
+    pegs.push({ x: cx+bOff,   y: midY + (areaBot-areaTop)*0.1,  type:'bumper' });
+  }
+
+  /* ── PINBALL: 파티클 ── */
+  function spawnParticles(x, y, nx, ny, isBumper) {
+    const count = isBumper ? 12 : 5;
+    const base  = Math.atan2(ny, nx);
+    for (let i = 0; i < count; i++) {
+      const a   = base + (Math.random()-.5) * (isBumper ? Math.PI*2 : Math.PI*0.9);
+      const spd = (isBumper ? 2.8 : 1.3) + Math.random() * (isBumper ? 2 : 1.5);
+      particles.push({
+        x, y,
+        vx: Math.cos(a)*spd, vy: Math.sin(a)*spd - (isBumper ? 1 : 0.4),
+        life: 1.0,
+        decay: isBumper ? 0.030 : 0.052,
+        r: isBumper ? 3 : 2,
+        color: isBumper ? '#fb923c' : '#a78bfa',
+      });
+    }
+  }
+
+  /* ── PINBALL: 그리기 ── */
+  function drawPinball() {
+    ctx.clearRect(0, 0, W, H);
+
+    /* 배경 */
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#0c1035'); bg.addColorStop(1, '#060818');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.roundRect(0, 0, W, H, 14); ctx.fill();
+
+    const slotH   = Math.round(H * SLOT_H_RATIO);
+    const slotY   = H - slotH;
+    const usableW = W - MARGIN * 2;
+    const now     = performance.now();
+
+    /* 슬롯 */
+    if (slots.length) {
+      const slotW = usableW / slots.length;
+      slots.forEach((s, i) => {
+        const sx   = MARGIN + i * slotW;
+        const glow = winnerGlow && winnerGlow.idx === i ? Math.max(0, 1-(now-winnerGlow.t)/700) : 0;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(sx, slotY, slotW, slotH); ctx.clip();
+        ctx.fillStyle = s.color + (glow > 0.5 ? 'cc' : '33');
+        ctx.fillRect(sx, slotY, slotW, slotH);
+        if (glow > 0) { ctx.fillStyle = `rgba(255,255,255,${glow*0.25})`; ctx.fillRect(sx, slotY, slotW, slotH); }
+        ctx.restore();
+        ctx.fillStyle = s.color; ctx.fillRect(sx+1, slotY, slotW-2, 3);
+
+        const label    = (s.label || `항목 ${i+1}`).trim();
+        const narrow   = slotW < 54;
+        const fontSize = Math.max(9, Math.min(narrow ? 11 : 14, Math.floor(slotW*(narrow ? 0.38 : 0.32))));
+        ctx.save();
+        ctx.beginPath(); ctx.rect(sx+2, slotY+2, slotW-4, slotH-4); ctx.clip();
+        ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.font=`bold ${fontSize}px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
+        if (narrow) { ctx.translate(sx+slotW/2, slotY+slotH/2); ctx.rotate(-Math.PI/2); ctx.fillText(label,0,0,slotH-10); }
+        else        { ctx.fillText(label, sx+slotW/2, slotY+slotH/2, slotW-8); }
+        ctx.restore();
+      });
+      ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
+      for (let i=1; i<slots.length; i++) {
+        const x=MARGIN+i*slotW;
+        ctx.beginPath(); ctx.moveTo(x,slotY); ctx.lineTo(x,H); ctx.stroke();
+      }
+    }
+
+    /* 벽 & 경계 */
+    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(MARGIN,slotY); ctx.lineTo(W-MARGIN,slotY); ctx.stroke();
+    ctx.strokeStyle='rgba(100,150,255,0.3)'; ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(MARGIN,20);   ctx.lineTo(MARGIN,slotY);
+    ctx.moveTo(W-MARGIN,20); ctx.lineTo(W-MARGIN,slotY);
+    ctx.stroke();
+
+    /* 드롭존 */
+    if (!dropping) {
+      ctx.fillStyle='rgba(255,255,255,0.09)';
+      ctx.beginPath(); ctx.roundRect(MARGIN,8,W-MARGIN*2,18,9); ctx.fill();
+      ctx.fillStyle='rgba(255,255,255,0.42)';
+      ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('▼ 공 낙하 구간', W/2, 17);
+    }
+
+    /* 파티클 업데이트 & 렌더링 */
+    particles = particles.filter(p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.07; p.vx*=0.97; p.life-=p.decay; return p.life>0; });
+    particles.forEach(p => {
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r*p.life, 0, Math.PI*2);
+      ctx.fillStyle = p.color + Math.round(p.life*255).toString(16).padStart(2,'0');
+      ctx.fill();
+    });
+
+    /* 잔상 */
+    ballTrail.forEach((pos, i) => {
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, BALL_R*((i+1)/ballTrail.length), 0, Math.PI*2);
+      ctx.fillStyle=`rgba(251,191,36,${((i+1)/ballTrail.length)*0.22})`; ctx.fill();
+    });
+
+    /* 페그 */
+    pegs.forEach((p, i) => {
+      const isBumper = p.type === 'bumper';
+      const pegR  = isBumper ? Math.round(PEG_R*2) : PEG_R;
+      const hitT  = hitPegs.get(i);
+      const hitFrac = hitT ? Math.max(0,1-(now-hitT)/(isBumper?500:280)) : 0;
+      if (hitFrac<=0 && hitT) hitPegs.delete(i);
+
+      if (isBumper) {
+        /* 범퍼 글로우 */
+        const gr = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,pegR*4);
+        gr.addColorStop(0, hitFrac>0?`rgba(255,120,0,${0.75*hitFrac})`:'rgba(239,68,68,0.32)');
+        gr.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR*4,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+        /* 범퍼 외곽 링 */
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR+3,0,Math.PI*2);
+        ctx.strokeStyle=hitFrac>0?'#fff':'rgba(239,68,68,0.7)'; ctx.lineWidth=2; ctx.stroke();
+        /* 범퍼 몸체 */
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR,0,Math.PI*2);
+        ctx.fillStyle=hitFrac>0?'#fde68a':'#ef4444'; ctx.fill();
+        /* 범퍼 내부 원 */
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR*0.42,0,Math.PI*2);
+        ctx.fillStyle=hitFrac>0?'#fff':'rgba(255,255,255,0.45)'; ctx.fill();
+        /* 범퍼 라벨 */
+        ctx.fillStyle=hitFrac>0?'#92400e':'rgba(255,255,255,0.9)';
+        ctx.font=`bold ${pegR}px sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('!', p.x, p.y+1);
+      } else {
+        /* 일반 페그 글로우 */
+        const gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,pegR*3.5);
+        gr.addColorStop(0,hitFrac>0?`rgba(255,230,100,${0.5*hitFrac})`:'rgba(96,165,250,0.22)');
+        gr.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR*3.5,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+        /* 페그 몸체 */
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR,0,Math.PI*2);
+        ctx.fillStyle=hitFrac>0?`rgb(${Math.round(196+59*hitFrac)},${Math.round(181+74*hitFrac)},${Math.round(253-200*hitFrac)})`:'#c4b5fd';
+        ctx.fill();
+        ctx.strokeStyle=hitFrac>0?'#fff':'rgba(255,255,255,0.6)'; ctx.lineWidth=1.2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(p.x-pegR*.28,p.y-pegR*.28,pegR*.32,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,255,255,0.65)'; ctx.fill();
+      }
+    });
+
+    /* 공 */
+    if (ball) {
+      const bg2=ctx.createRadialGradient(ball.x,ball.y,0,ball.x,ball.y,BALL_R*3);
+      bg2.addColorStop(0,'rgba(251,191,36,0.5)'); bg2.addColorStop(1,'rgba(251,191,36,0)');
+      ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R*3,0,Math.PI*2); ctx.fillStyle=bg2; ctx.fill();
+      const bg3=ctx.createRadialGradient(ball.x-BALL_R*.32,ball.y-BALL_R*.32,0,ball.x,ball.y,BALL_R);
+      bg3.addColorStop(0,'#fde68a'); bg3.addColorStop(0.55,'#f59e0b'); bg3.addColorStop(1,'#92400e');
+      ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R,0,Math.PI*2);
+      ctx.fillStyle=bg3; ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=1.4; ctx.stroke();
+    }
+
+    /* 당첨 글로우 지속 */
+    if (winnerGlow && now - winnerGlow.t < 700) requestAnimationFrame(drawPinball);
+    else if (winnerGlow && now - winnerGlow.t >= 700) winnerGlow = null;
+  }
+
+  /* ── PINBALL: 물리 ── */
+  function dropBall() {
+    if (dropping || !slots.length) return;
+    dropping = true;
+    btnAction.disabled = true;
+    resultBox.className = 'result-box';
+    ballTrail = []; particles = [];
+
+    const startX = MARGIN + BALL_R + Math.random() * (W - MARGIN*2 - BALL_R*2);
+    ball = { x: startX, y: BALL_R+10, vx: (Math.random()-.5)*1.0, vy: 1, inSlot:false, slotIdx:-1 };
+
+    const slotH   = Math.round(H * SLOT_H_RATIO);
+    const slotY   = H - slotH;
+    const usableW = W - MARGIN * 2;
+
+    function step() {
+      ball.vy += GRAVITY;
+      ball.vx *= FRICTION_X;
+
+      const spd = Math.hypot(ball.vx, ball.vy);
+      if (spd > MAX_SPEED) { ball.vx=ball.vx/spd*MAX_SPEED; ball.vy=ball.vy/spd*MAX_SPEED; }
+
+      ballTrail.push({ x: ball.x, y: ball.y });
+      if (ballTrail.length > 8) ballTrail.shift();
+
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      /* 슬롯 진입 */
+      if (!ball.inSlot && ball.y + BALL_R >= slotY) {
+        const slotW = usableW / slots.length;
+        const idx   = Math.max(0, Math.min(slots.length-1, Math.floor((ball.x-MARGIN)/slotW)));
+        ball.inSlot=true; ball.slotIdx=idx;
+        ball.x = MARGIN + slotW*(idx+0.5); ball.vx=0; ball.vy=Math.max(ball.vy,3);
+      }
+
+      if (ball.inSlot) {
+        if (ball.y - BALL_R > H) {
+          const idx=ball.slotIdx;
+          ball=null; ballTrail=[]; particles=[];
+          dropping=false; btnAction.disabled=false;
+          winnerGlow={ idx, t: performance.now() };
+          showResult(idx); drawPinball(); return;
+        }
+        drawPinball(); animFrame=requestAnimationFrame(step); return;
+      }
+
+      /* 벽 충돌 */
+      if (ball.x-BALL_R < MARGIN)   { ball.x=MARGIN+BALL_R;   ball.vx= Math.abs(ball.vx)*RESTITUTION+0.3; }
+      if (ball.x+BALL_R > W-MARGIN) { ball.x=W-MARGIN-BALL_R; ball.vx=-Math.abs(ball.vx)*RESTITUTION-0.3; }
+
+      /* 페그 충돌 */
+      pegs.forEach((p, i) => {
+        const isBumper = p.type === 'bumper';
+        const pegR = isBumper ? Math.round(PEG_R*2) : PEG_R;
+        const dx=ball.x-p.x, dy=ball.y-p.y;
+        const dist=Math.hypot(dx,dy);
+        const minD=BALL_R+pegR;
+        if (dist < minD && dist > 0.01) {
+          const nx=dx/dist, ny=dy/dist;
+          const dot=ball.vx*nx+ball.vy*ny;
+          if (dot < 0) {
+            const res = isBumper ? Math.min(RESTITUTION*1.5, 1.1) : RESTITUTION;
+            ball.vx=(ball.vx-2*dot*nx)*res;
+            ball.vy=(ball.vy-2*dot*ny)*res;
+            if (isBumper) { ball.vx+=nx*1.5; ball.vy+=ny*1.5; }
+            else           { ball.vx+=(Math.random()-.5)*1.2; }
+            const s2=Math.hypot(ball.vx,ball.vy), cap=isBumper?MAX_SPEED*1.4:MAX_SPEED;
+            if(s2>cap){ball.vx=ball.vx/s2*cap;ball.vy=ball.vy/s2*cap;}
+            hitPegs.set(i, performance.now());
+            spawnParticles(ball.x, ball.y, nx, ny, isBumper);
+          }
+          const ov=minD-dist;
+          ball.x+=nx*ov*1.08; ball.y+=ny*ov*1.08;
+        }
+      });
+
+      drawPinball(); animFrame=requestAnimationFrame(step);
+    }
+    animFrame=requestAnimationFrame(step);
+  }
+
+  /* ════════════════════════════
+     결과 표시 (공통)
+  ════════════════════════════ */
+  function showResult(idx) {
+    const winner = slots[idx];
+    const label  = (winner.label || `항목 ${idx+1}`).trim();
     resultLabel.textContent = '🎉 당첨!';
     resultValue.textContent = label;
     resultValue.style.background = `linear-gradient(135deg, ${winner.color}, #fff)`;
@@ -923,48 +1138,102 @@
     resultBox.className = 'result-box show';
   }
 
-  /* ── 이벤트 ── */
+  /* ════════════════════════════
+     저장 / 불러오기
+  ════════════════════════════ */
+  function saveData() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      mode,
+      map:    currentMap,
+      count:  slots.length,
+      labels: slots.map(s => s.label),
+    }));
+    showMsg('✔ 적용됐어요!');
+  }
+
+  function loadData() {
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { try { return JSON.parse(raw); } catch {} }
+    /* 구버전 spin-picker 데이터 마이그레이션 */
+    raw = localStorage.getItem('spin-picker-data');
+    if (raw) { try { const d = JSON.parse(raw); return { mode:'spin', count:d.count, labels:d.labels }; } catch {} }
+    return null;
+  }
+
+  function showMsg(text) {
+    saveMsg.textContent = text;
+    saveMsg.style.opacity = '1';
+    clearTimeout(showMsg._t);
+    showMsg._t = setTimeout(() => { saveMsg.style.opacity = '0'; }, 2400);
+  }
+
+  /* ════════════════════════════
+     슬롯 관리
+  ════════════════════════════ */
+  function buildSlots(count, labels = []) {
+    slots = Array.from({ length: count }, (_, i) => ({
+      label: labels[i] ?? '',
+      color: COLORS[i % COLORS.length],
+    }));
+  }
+
+  function renderInputs() {
+    slotsList.innerHTML = '';
+    slots.forEach((s, i) => {
+      const item = document.createElement('div');
+      item.className = 'slot-item';
+      const dot = document.createElement('div');
+      dot.className = 'slot-dot';
+      dot.style.background = s.color;
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = `항목 ${i+1}`;
+      inp.value = s.label;
+      inp.addEventListener('input', () => { slots[i].label = inp.value; drawBoard(); });
+      item.append(dot, inp);
+      slotsList.appendChild(item);
+    });
+  }
+
+  /* ════════════════════════════
+     이벤트
+  ════════════════════════════ */
+  btnAction.addEventListener('click', () => {
+    if (mode === 'spin') spin();
+    else dropBall();
+  });
+
   btnApply.addEventListener('click', () => {
-    const count = Math.min(20, Math.max(2, parseInt(slotCountInput.value) || 6));
+    const max   = mode === 'pinball' ? 10 : 20;
+    const count = Math.min(max, Math.max(2, parseInt(slotCountInput.value) || 6));
     slotCountInput.value = count;
     buildSlots(count, slots.map(s => s.label));
     renderInputs();
-    drawWheel();
+    if (mode === 'pinball') { MARGIN = Math.round(W*.055); const slotW=(W-MARGIN*2)/count; BALL_R=Math.max(4,Math.min(11,Math.floor(slotW/5.5))); PEG_R=Math.max(3,Math.round(BALL_R*.60)); buildPegs(); }
+    drawBoard();
   });
 
   btnSave.addEventListener('click', saveData);
 
   btnReset.addEventListener('click', () => {
     if (!confirm('모든 항목을 초기화할까요?')) return;
-    localStorage.removeItem(STORAGE_KEY);
     buildSlots(6);
     slotCountInput.value = 6;
     renderInputs();
-    drawWheel();
+    if (mode === 'pinball') buildPegs();
+    drawBoard();
     resultBox.className = 'result-box';
   });
 
-  btnSpin.addEventListener('click', spin);
-
-  /* ── 헤더 설정 메뉴 ── */
+  /* 헤더 설정 드롭다운 */
   function toggleDropdown(e) {
     e.stopPropagation();
     const isOpen = settingsDrop.classList.toggle('open');
     btnSettings.classList.toggle('active', isOpen);
   }
-
-  function closeDropdown() {
-    settingsDrop.classList.remove('open');
-    btnSettings.classList.remove('active');
-  }
-
+  function closeDropdown() { settingsDrop.classList.remove('open'); btnSettings.classList.remove('active'); }
   btnSettings.addEventListener('click', toggleDropdown);
-
-  document.addEventListener('click', (e) => {
-    if (!settingsDrop.contains(e.target) && e.target !== btnSettings) {
-      closeDropdown();
-    }
-  });
+  document.addEventListener('click', e => { if (!settingsDrop.contains(e.target) && e.target !== btnSettings) closeDropdown(); });
 
   menuClearCache.addEventListener('click', () => {
     closeDropdown();
@@ -974,12 +1243,12 @@
 
   menuReset.addEventListener('click', () => {
     closeDropdown();
-    if (!confirm('휠과 저장 데이터를 모두 초기화할까요?')) return;
+    if (!confirm('보드와 저장 데이터를 모두 초기화할까요?')) return;
     localStorage.removeItem(STORAGE_KEY);
-    buildSlots(6);
-    slotCountInput.value = 6;
+    buildSlots(6); slotCountInput.value = 6;
     renderInputs();
-    drawWheel();
+    if (mode === 'pinball') buildPegs();
+    drawBoard();
     resultBox.className = 'result-box';
     showMsg('↺ 초기화됐어요!');
   });
@@ -989,38 +1258,58 @@
     if (!key) { alert('예제를 먼저 선택해주세요.'); return; }
     const preset = PRESETS[key];
     if (!preset) return;
-    buildSlots(preset.items.length, preset.items);
-    slotCountInput.value = preset.items.length;
+    const max   = mode === 'pinball' ? 10 : 20;
+    const count = Math.min(max, preset.items.length);
+    buildSlots(count, preset.items);
+    slotCountInput.value = count;
     renderInputs();
-    drawWheel();
+    if (mode === 'pinball') { MARGIN=Math.round(W*.055); const slotW=(W-MARGIN*2)/count; BALL_R=Math.max(4,Math.min(11,Math.floor(slotW/5.5))); PEG_R=Math.max(3,Math.round(BALL_R*.60)); buildPegs(); }
+    drawBoard();
     resultBox.className = 'result-box';
     showMsg(`✔ "${preset.title}" 불러왔어요!`);
     presetSelect.value = '';
     if (isMobile()) openSheet();
   });
 
-  /* ── 리사이즈: 모바일↔데스크탑 전환 시 시트 상태 정리 ── */
+  /* 리사이즈 */
   let resizeTimer;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
       resizeCanvas();
-      if (!isMobile()) {
-        backdrop.classList.remove('visible');
-        document.body.style.overflow = '';
-      }
+      if (!isMobile()) { backdrop.classList.remove('visible'); document.body.style.overflow = ''; }
     }, 100);
   });
 
-  /* ── 초기 로드 ── */
+  /* ════════════════════════════
+     초기화
+  ════════════════════════════ */
   (function init() {
     const saved = loadData();
     if (saved) {
+      mode = saved.mode === 'pinball' ? 'pinball' : 'spin';
+      if (saved.map) {
+        currentMap = saved.map;
+        document.querySelectorAll('.map-btn').forEach(b => b.classList.toggle('active', b.dataset.map === currentMap));
+      }
       slotCountInput.value = saved.count;
       buildSlots(saved.count, saved.labels);
     } else {
       buildSlots(6);
     }
+
+    /* 모드 UI 초기 적용 */
+    const isPinball = mode === 'pinball';
+    document.body.classList.toggle('mode-pinball', isPinball);
+    verSpin.classList.toggle('active', !isPinball);
+    verPinball.classList.toggle('active', isPinball);
+    logo.textContent      = isPinball ? '🎰' : '🎡';
+    titleMain.childNodes[0].textContent = isPinball ? 'Pinball Picker ' : 'Spin Picker ';
+    titleSub.textContent  = isPinball ? '핀볼 뽑기' : '뽑기판';
+    btnAction.textContent = isPinball ? '▼ 공 떨어뜨리기!' : '▶ 돌리기!';
+    document.title        = isPinball ? 'Pinball Picker · 핀볼 뽑기' : 'Spin Picker · 뽑기판';
+    slotCountInput.max    = isPinball ? 10 : 20;
+
     renderInputs();
     resizeCanvas();
   })();

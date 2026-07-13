@@ -444,7 +444,7 @@
   <div class="header-spacer"></div>
   <div class="version-toggle">
     <span class="ver-btn active" id="verSpin" role="button" tabindex="0">🎡 <span class="ver-label">Spin</span></span>
-    <span class="ver-btn" id="verPinball" role="button" tabindex="0">🎰 <span class="ver-label">Pinball</span></span>
+    <span class="ver-btn" id="verPinball" role="button" tabindex="0">🎪 <span class="ver-label">Pinball</span></span>
   </div>
   <div class="settings-menu-wrap">
     <button class="btn-settings" id="btnSettings" title="설정">⚙️</button>
@@ -498,13 +498,13 @@
         </div>
       </div>
       <div class="divider"></div>
-      <div class="section-label">칸 수 설정</div>
+      <div class="section-label" id="lblSlotSection">칸 수 설정</div>
       <div class="count-row">
-        <label>칸 수</label>
+        <label id="lblSlotCount">칸 수</label>
         <input type="number" id="slotCount" min="2" max="20" value="6" inputmode="numeric" />
         <button class="btn-apply" id="btnApply">변경</button>
       </div>
-      <div class="section-label">항목 입력</div>
+      <div class="section-label" id="lblItemsSection">항목 입력</div>
       <div class="slots-list" id="slotsList"></div>
       <div class="panel-actions">
         <button class="btn-save" id="btnSave">✅ 적용</button>
@@ -539,12 +539,21 @@
   };
 
   /* 핀볼 물리 상수 */
-  const GRAVITY      = 0.12;
-  const RESTITUTION  = 0.72;
-  const FRICTION_X   = 0.992;
-  const MAX_SPEED    = 6;
-  const NUM_PEG_ROWS = 9;
-  const SLOT_H_RATIO = 0.20;
+  const GRAVITY       = 0.045;
+  const RESTITUTION   = 0.72;
+  const FRICTION_X    = 0.992;
+  const MAX_SPEED     = 3.2;
+  const NUM_PEG_ROWS  = 8;
+  const FINISH_MARGIN = 10;
+  const STAGE_COUNT   = 3;
+  const STAGE_TYPES   = ['field', 'windmill', 'gate', 'funnel'];
+  const STAGE_TINT = {
+    field:    'rgba(34,211,238,0.05)',
+    windmill: 'rgba(251,146,60,0.08)',
+    gate:     'rgba(168,85,247,0.08)',
+    funnel:   'rgba(96,165,250,0.09)',
+  };
+  const STAGE_ICON = { field: '💎', windmill: '🌀', gate: '🚪', funnel: '⏳' };
 
   /* ════════════════════════════
      DOM
@@ -577,6 +586,9 @@
   const menuClearCache = document.getElementById('menuClearCache');
   const menuReset      = document.getElementById('menuReset');
   const btnCloseSheet  = document.getElementById('btnCloseSheet');
+  const lblSlotSection = document.getElementById('lblSlotSection');
+  const lblSlotCount   = document.getElementById('lblSlotCount');
+  const lblItemsSection= document.getElementById('lblItemsSection');
 
   /* ════════════════════════════
      상태
@@ -591,16 +603,22 @@
   let currentAngle = 0;
   let spinning = false;
 
-  /* 핀볼 상태 */
+  /* 핀볼(레이스) 상태 */
   let BALL_R, PEG_R, MARGIN;
   let currentMap = 'classic'; // 'classic' | 'random' | 'bumper'
   let pegs       = [];
-  let ball       = null;
-  let ballTrail  = [];
+  let racers     = [];
   let particles  = [];
+  let bgSquares  = [];
   let hitPegs    = new Map();
-  let winnerGlow = null;
-  let dropping   = false;
+  let raceWinner = null;
+  let raceEndT   = 0;
+  let racing     = false;
+  let idleFrame  = null;
+  let FUNNEL_TOP, FUNNEL_NECK_Y, FUNNEL_OPEN_Y, FIELD_BOT, STAGE_H, WORLD_H;
+  let funnelWalls = [], funnelBaffles = [], funnelNeckHalf = 0;
+  let stages = [], midWalls = [];
+  let scrollY = 0;
 
   /* ════════════════════════════
      모드 전환
@@ -610,8 +628,9 @@
 
     /* 진행 중인 애니메이션 중단 */
     if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
-    spinning = dropping = false;
-    ball = null; ballTrail = []; particles = [];
+    stopIdleLoop();
+    spinning = racing = false;
+    racers = []; particles = []; bgSquares = []; raceWinner = null;
     btnAction.disabled = false;
     resultBox.className = 'result-box';
 
@@ -624,11 +643,14 @@
     verSpin.classList.toggle('active', !isPinball);
     verPinball.classList.toggle('active', isPinball);
 
-    logo.textContent      = isPinball ? '🎰' : '🎡';
+    logo.textContent      = isPinball ? '🎪' : '🎡';
     titleMain.childNodes[0].textContent = isPinball ? 'Pinball Picker ' : 'Spin Picker ';
     titleSub.textContent  = isPinball ? '핀볼 뽑기' : '뽑기판';
-    btnAction.textContent = isPinball ? '▼ 공 떨어뜨리기!' : '▶ 돌리기!';
+    btnAction.textContent = isPinball ? '🏁 레이스 시작!' : '▶ 돌리기!';
     document.title        = isPinball ? 'Pinball Picker · 핀볼 뽑기' : 'Spin Picker · 뽑기판';
+    lblSlotSection.textContent  = isPinball ? '참가자 수 설정' : '칸 수 설정';
+    lblSlotCount.textContent    = isPinball ? '참가자 수' : '칸 수';
+    lblItemsSection.textContent = isPinball ? '참가자 이름' : '항목 입력';
 
     /* 핀볼 모드에서는 슬롯 수 최대 10 */
     slotCountInput.max = isPinball ? 10 : 20;
@@ -639,6 +661,7 @@
     }
 
     resizeCanvas();
+    if (isPinball) startIdleLoop();
   }
 
   verSpin.addEventListener('click', () => setMode('spin'));
@@ -649,10 +672,11 @@
   /* 맵 버튼 */
   document.querySelectorAll('.map-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (dropping) return;
+      if (racing) return;
       document.querySelectorAll('.map-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       currentMap = btn.dataset.map;
+      raceWinner = null; racers = []; scrollY = 0;
       buildPegs(); drawBoard();
     });
   });
@@ -703,9 +727,15 @@
       MARGIN = Math.round(W * 0.055);
       const usableW = W - MARGIN * 2;
       const slotW   = usableW / Math.max(1, slots.length);
-      BALL_R = Math.max(4, Math.min(11, Math.floor(slotW / 5.5)));
+      BALL_R = Math.max(4, Math.min(10, Math.floor(slotW / 6)));
       PEG_R  = Math.max(3, Math.round(BALL_R * 0.60));
+      FUNNEL_TOP    = 14;
+      FUNNEL_NECK_Y = Math.round(H * 0.11);
+      FUNNEL_OPEN_Y = Math.round(H * 0.27);
+      STAGE_H       = Math.round(H * 0.55);
+      computeFunnelWalls();
       buildPegs();
+      scrollY = 0;
     }
     drawBoard();
   }
@@ -811,63 +841,79 @@
     const arc = (Math.PI * 2) / slots.length;
     const normalized = ((-(currentAngle - Math.PI / 2)) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
     const index  = Math.floor(normalized / arc) % slots.length;
-    showResult(index);
+    const w = slots[index];
+    showResult(w.label || `항목 ${index+1}`, w.color);
   }
 
   /* ════════════════════════════
-     ── PINBALL: 페그 배치 ──
+     ── PINBALL: 깔때기(퍼널) ──
   ════════════════════════════ */
+  function computeFunnelWalls() {
+    const cx   = W / 2;
+    const half = Math.max(BALL_R * 2.2, (W - MARGIN * 2) * 0.15);
+    funnelNeckHalf = half;
+    funnelWalls = [
+      { x1: cx - half, y1: FUNNEL_TOP,    x2: cx - half, y2: FUNNEL_NECK_Y },
+      { x1: cx + half, y1: FUNNEL_TOP,    x2: cx + half, y2: FUNNEL_NECK_Y },
+      { x1: cx - half, y1: FUNNEL_NECK_Y, x2: MARGIN,     y2: FUNNEL_OPEN_Y },
+      { x1: cx + half, y1: FUNNEL_NECK_Y, x2: W - MARGIN, y2: FUNNEL_OPEN_Y },
+    ];
+    /* 지그재그 장애물은 넣지 않음: 짧은 대각선은 공이 끝점에 걸려 멈추는 문제가 있어
+       깔때기 옆벽만으로 좁은 통로를 만들고, 공끼리 부딪히며 자연스럽게 순서가 섞이게 한다 */
+    funnelBaffles = [];
+  }
+
+  /* ════════════════════════════
+     ── PINBALL: 스테이지 & 페그 배치 ──
+  ════════════════════════════ */
+  function buildStages() {
+    stages = [];
+    let y = FUNNEL_OPEN_Y + 10;
+    const pool = STAGE_TYPES.filter(t => t !== 'field').sort(() => Math.random() - 0.5);
+    for (let i = 0; i < STAGE_COUNT; i++) {
+      const type = i === 0 ? 'field' : pool[i - 1];
+      stages.push({ type, top: y, bot: y + STAGE_H });
+      y += STAGE_H;
+    }
+    FIELD_BOT = y;
+    WORLD_H   = FIELD_BOT + FINISH_MARGIN + 20;
+  }
+
   function buildPegs() {
-    pegs = [];
+    pegs = []; midWalls = [];
     if (!slots.length) return;
-    if      (currentMap === 'random') buildRandomPegs();
-    else if (currentMap === 'bumper') buildBumperPegs();
-    else                               buildClassicPegs();
+    buildStages();
+    stages.forEach(stage => {
+      if      (stage.type === 'windmill') buildWindmillStage(stage);
+      else if (stage.type === 'gate')     buildGateStage(stage);
+      else if (stage.type === 'funnel')   buildFunnelStage(stage);
+      else                                 buildFieldStage(stage);
+    });
+    updateDynamicPegs(performance.now());
   }
 
-  function buildClassicPegs() {
+  function buildFieldStage(stage) {
     const N = slots.length;
-    const slotH  = Math.round(H * SLOT_H_RATIO);
     const usableW = W - MARGIN * 2;
-    const slotW   = usableW / N;
-    const areaTop = 32, areaBot = H - slotH - 12;
-    const rowH    = (areaBot - areaTop) / (NUM_PEG_ROWS - 1);
-    for (let row = 0; row < NUM_PEG_ROWS; row++) {
-      const y = areaTop + row * rowH;
-      if (row % 2 === 0) {
-        for (let col = 0; col < N; col++)   pegs.push({ x: MARGIN + slotW*(col+0.5), y, type:'normal' });
-      } else {
-        for (let col = 0; col < N-1; col++) pegs.push({ x: MARGIN + slotW*(col+1),   y, type:'normal' });
+    const areaTop = stage.top + 14, areaBot = stage.bot - 14;
+    if (currentMap === 'random') {
+      const target  = N * 3;
+      const minGap  = (BALL_R + PEG_R) * 2.8;
+      let tries = 0;
+      while (tries < 500) {
+        tries++;
+        const x = MARGIN + minGap + Math.random() * (usableW - minGap * 2);
+        const y = areaTop + Math.random() * (areaBot - areaTop);
+        if (pegs.every(p => Math.hypot(p.x-x, p.y-y) >= minGap)) {
+          pegs.push({ x, y, type: 'normal' });
+          if (pegs.filter(p => p.y >= areaTop && p.y <= areaBot).length >= target) break;
+        }
       }
+      return;
     }
-  }
-
-  function buildRandomPegs() {
-    const N = slots.length;
-    const slotH  = Math.round(H * SLOT_H_RATIO);
-    const usableW = W - MARGIN * 2;
-    const areaTop = 40, areaBot = H - slotH - 20;
-    const target  = N * 4;
-    const minGap  = (BALL_R + PEG_R) * 2.8;
-    let tries = 0;
-    while (pegs.length < target && tries < 900) {
-      tries++;
-      const x = MARGIN + minGap + Math.random() * (usableW - minGap * 2);
-      const y = areaTop + Math.random() * (areaBot - areaTop);
-      if (pegs.every(p => Math.hypot(p.x-x, p.y-y) >= minGap))
-        pegs.push({ x, y, type: 'normal' });
-    }
-  }
-
-  function buildBumperPegs() {
-    /* 클래식 절반 행 + 범퍼 3개 */
-    const N = slots.length;
-    const slotH  = Math.round(H * SLOT_H_RATIO);
-    const usableW = W - MARGIN * 2;
-    const slotW   = usableW / N;
-    const areaTop = 32, areaBot = H - slotH - 12;
-    const rows = Math.ceil(NUM_PEG_ROWS / 2);
-    const rowH = (areaBot - areaTop) / (rows - 1);
+    const slotW = usableW / N;
+    const rows  = Math.max(3, Math.round((areaBot - areaTop) / (slotW * 0.9)));
+    const rowH  = (areaBot - areaTop) / (rows - 1);
     for (let row = 0; row < rows; row++) {
       const y = areaTop + row * rowH;
       if (row % 2 === 0) {
@@ -876,12 +922,76 @@
         for (let col = 0; col < N-1; col++) pegs.push({ x: MARGIN + slotW*(col+1),   y, type:'normal' });
       }
     }
-    const midY  = areaTop + (areaBot - areaTop) * 0.58;
-    const cx    = W / 2;
-    const bOff  = usableW * 0.22;
-    pegs.push({ x: cx,        y: midY - (areaBot-areaTop)*0.14, type:'bumper' });
-    pegs.push({ x: cx-bOff,   y: midY + (areaBot-areaTop)*0.1,  type:'bumper' });
-    pegs.push({ x: cx+bOff,   y: midY + (areaBot-areaTop)*0.1,  type:'bumper' });
+    if (currentMap === 'bumper') {
+      const midY = areaTop + (areaBot-areaTop)*0.55;
+      const cx   = W/2, bOff = usableW*0.22;
+      pegs.push({ x: cx,      y: midY - (areaBot-areaTop)*0.14, type:'bumper' });
+      pegs.push({ x: cx-bOff, y: midY + (areaBot-areaTop)*0.1,  type:'bumper' });
+      pegs.push({ x: cx+bOff, y: midY + (areaBot-areaTop)*0.1,  type:'bumper' });
+    }
+  }
+
+  function buildWindmillStage(stage) {
+    const cx   = W / 2;
+    const midY = (stage.top + stage.bot) / 2;
+    const usableW = W - MARGIN*2;
+    const radius = Math.min(usableW, STAGE_H) * 0.32;
+    const bladeCount = 3;
+    const speed  = (Math.random() < 0.5 ? 1 : -1) * (1.1 + Math.random()*0.7);
+    for (let b = 0; b < bladeCount; b++) {
+      pegs.push({
+        x: cx, y: midY, type: 'windmill-blade', hub: b === 0,
+        motion: { kind:'spin', cx, cy: midY, radius, angle0: b*(2*Math.PI/bladeCount), speed },
+      });
+    }
+    /* 위아래에 살짝 고정 페그를 두어 공이 회전 날개 쪽으로 유도되게 함 */
+    pegs.push({ x: MARGIN + usableW*0.2, y: stage.top + STAGE_H*0.2, type: 'normal' });
+    pegs.push({ x: MARGIN + usableW*0.8, y: stage.top + STAGE_H*0.2, type: 'normal' });
+    pegs.push({ x: MARGIN + usableW*0.2, y: stage.bot - STAGE_H*0.2, type: 'normal' });
+    pegs.push({ x: MARGIN + usableW*0.8, y: stage.bot - STAGE_H*0.2, type: 'normal' });
+  }
+
+  function buildGateStage(stage) {
+    const midY = (stage.top + stage.bot) / 2;
+    const usableW = W - MARGIN*2;
+    const amp  = usableW * 0.16;
+    const speed = 1.0 + Math.random()*0.5;
+    const r = PEG_R * 2.1;
+    pegs.push({ x:0, y:midY, type:'gate', r, motion:{ kind:'slide', baseX: MARGIN + usableW*0.28, amplitude: amp, speed, phase: 0 } });
+    pegs.push({ x:0, y:midY, type:'gate', r, motion:{ kind:'slide', baseX: MARGIN + usableW*0.72, amplitude: amp, speed, phase: Math.PI } });
+    /* 위쪽에 살짝 페그를 두어 공이 중앙으로 모이게 유도 */
+    pegs.push({ x: W/2 - usableW*0.22, y: stage.top + STAGE_H*0.18, type:'normal' });
+    pegs.push({ x: W/2 + usableW*0.22, y: stage.top + STAGE_H*0.18, type:'normal' });
+  }
+
+  function buildFunnelStage(stage) {
+    const cx = W / 2;
+    const neckHalf = Math.max(BALL_R * 2.4, (W - MARGIN*2) * 0.12);
+    const topY  = stage.top + 14;
+    const neckY = stage.top + STAGE_H * 0.42;
+    const neckY2= Math.min(neckY + 20, stage.bot - 30);
+    const openY = stage.bot - 12;
+    midWalls.push(
+      { x1: MARGIN,     y1: topY,  x2: cx-neckHalf, y2: neckY },
+      { x1: W-MARGIN,   y1: topY,  x2: cx+neckHalf, y2: neckY },
+      { x1: cx-neckHalf,y1: neckY, x2: cx-neckHalf, y2: neckY2 },
+      { x1: cx+neckHalf,y1: neckY, x2: cx+neckHalf, y2: neckY2 },
+      { x1: cx-neckHalf,y1: neckY2,x2: MARGIN,      y2: openY },
+      { x1: cx+neckHalf,y1: neckY2,x2: W-MARGIN,    y2: openY },
+    );
+  }
+
+  function updateDynamicPegs(now) {
+    pegs.forEach(p => {
+      if (!p.motion) return;
+      if (p.motion.kind === 'spin') {
+        const ang = p.motion.angle0 + now * 0.001 * p.motion.speed;
+        p.x = p.motion.cx + Math.cos(ang) * p.motion.radius;
+        p.y = p.motion.cy + Math.sin(ang) * p.motion.radius;
+      } else if (p.motion.kind === 'slide') {
+        p.x = p.motion.baseX + Math.sin(now * 0.001 * p.motion.speed + p.motion.phase) * p.motion.amplitude;
+      }
+    });
   }
 
   /* ── PINBALL: 파티클 ── */
@@ -912,60 +1022,57 @@
     ctx.fillStyle = bg;
     ctx.beginPath(); ctx.roundRect(0, 0, W, H, 14); ctx.fill();
 
-    const slotH   = Math.round(H * SLOT_H_RATIO);
-    const slotY   = H - slotH;
-    const usableW = W - MARGIN * 2;
-    const now     = performance.now();
+    const now = performance.now();
 
-    /* 슬롯 */
-    if (slots.length) {
-      const slotW = usableW / slots.length;
-      slots.forEach((s, i) => {
-        const sx   = MARGIN + i * slotW;
-        const glow = winnerGlow && winnerGlow.idx === i ? Math.max(0, 1-(now-winnerGlow.t)/700) : 0;
-        ctx.save();
-        ctx.beginPath(); ctx.rect(sx, slotY, slotW, slotH); ctx.clip();
-        ctx.fillStyle = s.color + (glow > 0.5 ? 'cc' : '33');
-        ctx.fillRect(sx, slotY, slotW, slotH);
-        if (glow > 0) { ctx.fillStyle = `rgba(255,255,255,${glow*0.25})`; ctx.fillRect(sx, slotY, slotW, slotH); }
-        ctx.restore();
-        ctx.fillStyle = s.color; ctx.fillRect(sx+1, slotY, slotW-2, 3);
+    /* 배경에 흩날리는 색종이 */
+    bgSquares.forEach(b => {
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.rot);
+      ctx.globalAlpha = b.alpha;
+      ctx.fillStyle = b.color;
+      ctx.fillRect(-b.size/2, -b.size/2, b.size, b.size);
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
 
-        const label    = (s.label || `항목 ${i+1}`).trim();
-        const narrow   = slotW < 54;
-        const fontSize = Math.max(9, Math.min(narrow ? 11 : 14, Math.floor(slotW*(narrow ? 0.38 : 0.32))));
-        ctx.save();
-        ctx.beginPath(); ctx.rect(sx+2, slotY+2, slotW-4, slotH-4); ctx.clip();
-        ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.font=`bold ${fontSize}px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
-        if (narrow) { ctx.translate(sx+slotW/2, slotY+slotH/2); ctx.rotate(-Math.PI/2); ctx.fillText(label,0,0,slotH-10); }
-        else        { ctx.fillText(label, sx+slotW/2, slotY+slotH/2, slotW-8); }
-        ctx.restore();
-      });
-      ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=1;
-      for (let i=1; i<slots.length; i++) {
-        const x=MARGIN+i*slotW;
-        ctx.beginPath(); ctx.moveTo(x,slotY); ctx.lineTo(x,H); ctx.stroke();
-      }
-    }
+    /* ── 월드 좌표계 (카메라 스크롤 적용) ── */
+    ctx.save();
+    ctx.translate(0, -scrollY);
 
-    /* 벽 & 경계 */
-    ctx.strokeStyle='rgba(255,255,255,0.12)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(MARGIN,slotY); ctx.lineTo(W-MARGIN,slotY); ctx.stroke();
-    ctx.strokeStyle='rgba(100,150,255,0.3)'; ctx.lineWidth=2;
+    /* 스테이지 구간 배경 톤 & 전환 표지 */
+    stages.forEach(stage => {
+      if (stage.bot < scrollY - 20 || stage.top > scrollY + H + 20) return;
+      ctx.fillStyle = STAGE_TINT[stage.type] || 'rgba(255,255,255,0.03)';
+      ctx.fillRect(MARGIN, stage.top, W-MARGIN*2, stage.bot-stage.top);
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(MARGIN, stage.top); ctx.lineTo(W-MARGIN, stage.top); ctx.stroke();
+      ctx.font = '13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.globalAlpha = 0.5;
+      ctx.fillText(STAGE_ICON[stage.type] || '', W/2, stage.top + 6);
+      ctx.globalAlpha = 1;
+    });
+
+    /* 깔때기(퍼널) */
+    ctx.strokeStyle = 'rgba(150,220,255,0.55)'; ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(MARGIN,20);   ctx.lineTo(MARGIN,slotY);
-    ctx.moveTo(W-MARGIN,20); ctx.lineTo(W-MARGIN,slotY);
+    funnelWalls.forEach(s => { ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); });
     ctx.stroke();
 
-    /* 드롭존 */
-    if (!dropping) {
-      ctx.fillStyle='rgba(255,255,255,0.09)';
-      ctx.beginPath(); ctx.roundRect(MARGIN,8,W-MARGIN*2,18,9); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,0.42)';
-      ctx.font='10px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('▼ 공 낙하 구간', W/2, 17);
-    }
+    /* 중간 병목 퍼널 (funnel 스테이지) */
+    ctx.strokeStyle = 'rgba(96,165,250,0.55)'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    midWalls.forEach(s => { ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); });
+    ctx.stroke();
+
+    /* 결승선 & 측벽 */
+    ctx.strokeStyle='rgba(100,150,255,0.35)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(MARGIN, FIELD_BOT); ctx.lineTo(W-MARGIN, FIELD_BOT); ctx.stroke();
+    ctx.strokeStyle='rgba(100,150,255,0.3)';
+    ctx.beginPath();
+    ctx.moveTo(MARGIN, FUNNEL_OPEN_Y);   ctx.lineTo(MARGIN, FIELD_BOT);
+    ctx.moveTo(W-MARGIN, FUNNEL_OPEN_Y); ctx.lineTo(W-MARGIN, FIELD_BOT);
+    ctx.stroke();
 
     /* 파티클 업데이트 & 렌더링 */
     particles = particles.filter(p => { p.x+=p.vx; p.y+=p.vy; p.vy+=0.07; p.vx*=0.97; p.life-=p.decay; return p.life>0; });
@@ -975,22 +1082,44 @@
       ctx.fill();
     });
 
-    /* 잔상 */
-    ballTrail.forEach((pos, i) => {
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, BALL_R*((i+1)/ballTrail.length), 0, Math.PI*2);
-      ctx.fillStyle=`rgba(251,191,36,${((i+1)/ballTrail.length)*0.22})`; ctx.fill();
-    });
-
-    /* 페그 */
+    /* 페그 (일반: 다이아몬드 / 범퍼: 원 / 바람개비 / 게이트) */
     pegs.forEach((p, i) => {
       const isBumper = p.type === 'bumper';
-      const pegR  = isBumper ? Math.round(PEG_R*2) : PEG_R;
+      const isWindmill = p.type === 'windmill-blade';
+      const isGate = p.type === 'gate';
+      const pegR  = p.r ? p.r : (isBumper ? Math.round(PEG_R*2) : PEG_R);
       const hitT  = hitPegs.get(i);
       const hitFrac = hitT ? Math.max(0,1-(now-hitT)/(isBumper?500:280)) : 0;
       if (hitFrac<=0 && hitT) hitPegs.delete(i);
 
-      if (isBumper) {
+      if (isWindmill) {
+        if (p.hub) {
+          ctx.beginPath(); ctx.arc(p.motion.cx, p.motion.cy, pegR*0.8, 0, Math.PI*2);
+          ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(251,191,36,0.6)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(p.motion.cx, p.motion.cy); ctx.lineTo(p.x, p.y); ctx.stroke();
+        const gr = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,pegR*3);
+        gr.addColorStop(0, hitFrac>0?`rgba(255,255,255,${0.6*hitFrac})`:'rgba(251,146,60,0.35)');
+        gr.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR*3,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR,0,Math.PI*2);
+        ctx.fillStyle = hitFrac>0 ? '#fff' : '#fb923c';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.2; ctx.stroke();
+      } else if (isGate) {
+        const gr = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,pegR*2.6);
+        gr.addColorStop(0, hitFrac>0?`rgba(255,255,255,${0.6*hitFrac})`:'rgba(168,85,247,0.3)');
+        gr.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.beginPath(); ctx.arc(p.x,p.y,pegR*2.6,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.beginPath(); ctx.roundRect(-pegR*0.9, -pegR*1.3, pegR*1.8, pegR*2.6, pegR*0.4);
+        ctx.fillStyle = hitFrac>0 ? '#fff' : '#a855f7';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.restore();
+      } else if (isBumper) {
         /* 범퍼 글로우 */
         const gr = ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,pegR*4);
         gr.addColorStop(0, hitFrac>0?`rgba(255,120,0,${0.75*hitFrac})`:'rgba(239,68,68,0.32)');
@@ -1012,127 +1141,385 @@
       } else {
         /* 일반 페그 글로우 */
         const gr=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,pegR*3.5);
-        gr.addColorStop(0,hitFrac>0?`rgba(255,230,100,${0.5*hitFrac})`:'rgba(96,165,250,0.22)');
+        gr.addColorStop(0,hitFrac>0?`rgba(255,255,255,${0.55*hitFrac})`:'rgba(34,211,238,0.28)');
         gr.addColorStop(1,'rgba(0,0,0,0)');
         ctx.beginPath(); ctx.arc(p.x,p.y,pegR*3.5,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
-        /* 페그 몸체 */
-        ctx.beginPath(); ctx.arc(p.x,p.y,pegR,0,Math.PI*2);
-        ctx.fillStyle=hitFrac>0?`rgb(${Math.round(196+59*hitFrac)},${Math.round(181+74*hitFrac)},${Math.round(253-200*hitFrac)})`:'#c4b5fd';
+        /* 다이아몬드 몸체 */
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(Math.PI/4);
+        ctx.beginPath(); ctx.rect(-pegR*0.72, -pegR*0.72, pegR*1.44, pegR*1.44);
+        ctx.fillStyle = hitFrac>0 ? '#ffffff' : '#22d3ee';
         ctx.fill();
-        ctx.strokeStyle=hitFrac>0?'#fff':'rgba(255,255,255,0.6)'; ctx.lineWidth=1.2; ctx.stroke();
-        ctx.beginPath(); ctx.arc(p.x-pegR*.28,p.y-pegR*.28,pegR*.32,0,Math.PI*2);
-        ctx.fillStyle='rgba(255,255,255,0.65)'; ctx.fill();
+        ctx.strokeStyle = hitFrac>0 ? '#fff' : 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.restore();
       }
     });
 
-    /* 공 */
-    if (ball) {
-      const bg2=ctx.createRadialGradient(ball.x,ball.y,0,ball.x,ball.y,BALL_R*3);
-      bg2.addColorStop(0,'rgba(251,191,36,0.5)'); bg2.addColorStop(1,'rgba(251,191,36,0)');
-      ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R*3,0,Math.PI*2); ctx.fillStyle=bg2; ctx.fill();
-      const bg3=ctx.createRadialGradient(ball.x-BALL_R*.32,ball.y-BALL_R*.32,0,ball.x,ball.y,BALL_R);
-      bg3.addColorStop(0,'#fde68a'); bg3.addColorStop(0.55,'#f59e0b'); bg3.addColorStop(1,'#92400e');
-      ctx.beginPath(); ctx.arc(ball.x,ball.y,BALL_R,0,Math.PI*2);
-      ctx.fillStyle=bg3; ctx.fill();
-      ctx.strokeStyle='rgba(255,255,255,0.55)'; ctx.lineWidth=1.4; ctx.stroke();
-    }
+    /* 레이서 잔상 */
+    racers.forEach(r => {
+      if (r.y > WORLD_H) return;
+      r.trail.forEach((pos, i) => {
+        const f = (i+1)/r.trail.length;
+        ctx.beginPath(); ctx.arc(pos.x,pos.y,BALL_R*f,0,Math.PI*2);
+        ctx.fillStyle = r.color + Math.round(f*60).toString(16).padStart(2,'0');
+        ctx.fill();
+      });
+    });
+    /* 레이서 공 */
+    racers.forEach(r => {
+      if (r.y > WORLD_H) return;
+      const glow = ctx.createRadialGradient(r.x,r.y,0,r.x,r.y,BALL_R*2.4);
+      glow.addColorStop(0, r.color+'88'); glow.addColorStop(1, r.color+'00');
+      ctx.beginPath(); ctx.arc(r.x,r.y,BALL_R*2.4,0,Math.PI*2); ctx.fillStyle=glow; ctx.fill();
+      const grad = ctx.createRadialGradient(r.x-BALL_R*.3,r.y-BALL_R*.3,0,r.x,r.y,BALL_R);
+      grad.addColorStop(0,'#fff'); grad.addColorStop(0.45,r.color); grad.addColorStop(1,r.color);
+      ctx.beginPath(); ctx.arc(r.x,r.y,BALL_R,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=1; ctx.stroke();
+    });
 
-    /* 당첨 글로우 지속 */
-    if (winnerGlow && now - winnerGlow.t < 700) requestAnimationFrame(drawPinball);
-    else if (winnerGlow && now - winnerGlow.t >= 700) winnerGlow = null;
+    ctx.restore();
+    /* ── 여기부터 화면 좌표계 (스크롤 영향 없음) ── */
+
+    /* 실시간 순위표 */
+    drawLeaderboard();
+
+    /* 우승자 오버레이 */
+    if (raceWinner) drawWinnerOverlay(now);
+  }
+
+  function drawLeaderboard() {
+    if (!slots.length) return;
+    let list;
+    if (racers.length) {
+      list = racers.map(r => ({ label: r.label, color: r.color, y: r.y, finished: r.finished }))
+                   .sort((a,b) => (b.finished - a.finished) || (b.y - a.y));
+    } else {
+      list = slots.map(s => ({ label: s.label, color: s.color }));
+    }
+    const n = list.length;
+    const fontSize = Math.max(8, Math.min(11, Math.floor(150/n)));
+    ctx.font = `bold ${fontSize}px 'Apple SD Gothic Neo','Malgun Gothic',sans-serif`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    list.forEach((item, i) => {
+      const label = (item.label || `참가자${i+1}`).trim();
+      const y = 6 + i * (fontSize + 3);
+      ctx.fillStyle = item.color;
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 2;
+      ctx.fillText(`${label} #${i+1}`, W-6, y, W*0.55);
+    });
+    ctx.shadowBlur = 0;
+  }
+
+  function drawWinnerOverlay(now) {
+    const t = Math.min(1, (now - raceEndT) / 450);
+    const scale = 0.7 + 0.3 * easeOut(t);
+    ctx.save();
+    ctx.globalAlpha = 0.5 * t;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = t;
+    ctx.translate(W/2, H*0.42);
+    ctx.scale(scale, scale);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `bold ${Math.max(14, Math.floor(W*0.08))}px 'Apple SD Gothic Neo',sans-serif`;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fillText('WINNER', 0, -Math.floor(W*0.09));
+    ctx.font = `bold ${Math.max(18, Math.floor(W*0.12))}px 'Apple SD Gothic Neo',sans-serif`;
+    ctx.fillStyle = raceWinner.color;
+    ctx.shadowColor = raceWinner.color; ctx.shadowBlur = 18;
+    ctx.fillText((raceWinner.label||'').trim() || '참가자', 0, Math.floor(W*0.04));
+    ctx.restore();
   }
 
   /* ── PINBALL: 물리 ── */
-  function dropBall() {
-    if (dropping || !slots.length) return;
-    dropping = true;
-    btnAction.disabled = true;
-    resultBox.className = 'result-box';
-    ballTrail = []; particles = [];
-
-    const startX = MARGIN + BALL_R + Math.random() * (W - MARGIN*2 - BALL_R*2);
-    ball = { x: startX, y: BALL_R+10, vx: (Math.random()-.5)*1.0, vy: 1, inSlot:false, slotIdx:-1 };
-
-    const slotH   = Math.round(H * SLOT_H_RATIO);
-    const slotY   = H - slotH;
-    const usableW = W - MARGIN * 2;
-
-    function step() {
-      ball.vy += GRAVITY;
-      ball.vx *= FRICTION_X;
-
-      const spd = Math.hypot(ball.vx, ball.vy);
-      if (spd > MAX_SPEED) { ball.vx=ball.vx/spd*MAX_SPEED; ball.vy=ball.vy/spd*MAX_SPEED; }
-
-      ballTrail.push({ x: ball.x, y: ball.y });
-      if (ballTrail.length > 8) ballTrail.shift();
-
-      ball.x += ball.vx;
-      ball.y += ball.vy;
-
-      /* 슬롯 진입 */
-      if (!ball.inSlot && ball.y + BALL_R >= slotY) {
-        const slotW = usableW / slots.length;
-        const idx   = Math.max(0, Math.min(slots.length-1, Math.floor((ball.x-MARGIN)/slotW)));
-        ball.inSlot=true; ball.slotIdx=idx;
-        ball.x = MARGIN + slotW*(idx+0.5); ball.vx=0; ball.vy=Math.max(ball.vy,3);
+  function collideSegment(r, seg) {
+    const dx = seg.x2-seg.x1, dy = seg.y2-seg.y1;
+    const len2 = dx*dx+dy*dy || 1;
+    let t = ((r.x-seg.x1)*dx + (r.y-seg.y1)*dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const px = seg.x1+dx*t, py = seg.y1+dy*t;
+    const nx0 = r.x-px, ny0 = r.y-py;
+    const dist = Math.hypot(nx0, ny0);
+    if (dist < BALL_R && dist > 0.001) {
+      const nx = nx0/dist, ny = ny0/dist;
+      const dot = r.vx*nx + r.vy*ny;
+      if (dot < 0) {
+        /* 법선 성분만 반사·감쇠 (접선 속도는 유지해야 완만한 경사에서도 미끄러져 내려감) */
+        const j = -(1 + RESTITUTION) * dot;
+        r.vx += j * nx;
+        r.vy += j * ny;
       }
+      const ov = BALL_R - dist;
+      r.x += nx*ov*1.05; r.y += ny*ov*1.05;
+    }
+  }
 
-      if (ball.inSlot) {
-        if (ball.y - BALL_R > H) {
-          const idx=ball.slotIdx;
-          ball=null; ballTrail=[]; particles=[];
-          dropping=false; btnAction.disabled=false;
-          winnerGlow={ idx, t: performance.now() };
-          showResult(idx); drawPinball(); return;
+  function collidePeg(r, p, i) {
+    const isBumper  = p.type === 'bumper';
+    const isWindmill= p.type === 'windmill-blade';
+    const isGate    = p.type === 'gate';
+    const pegR  = p.r ? p.r : (isBumper ? Math.round(PEG_R*2) : PEG_R);
+    const dx=r.x-p.x, dy=r.y-p.y;
+    const dist=Math.hypot(dx,dy);
+    const minD=BALL_R+pegR;
+    if (dist < minD && dist > 0.01) {
+      const nx=dx/dist, ny=dy/dist;
+      const dot=r.vx*nx+r.vy*ny;
+      if (dot < 0) {
+        /* 일반 페그 반발계수를 0.38로 낮춰 공이 튀어 올라 안착하는 현상 방지 */
+        const res = isBumper ? Math.min(RESTITUTION*1.5, 1.1) : isWindmill ? 1.1 : isGate ? RESTITUTION : 0.38;
+        r.vx=(r.vx-2*dot*nx)*res;
+        r.vy=(r.vy-2*dot*ny)*res;
+        if (isBumper) { r.vx+=nx*1.5; r.vy+=ny*1.5; }
+        else if (isWindmill && p.motion) {
+          const angle = p.motion.angle0 + performance.now() * 0.001 * p.motion.speed;
+          const sign  = Math.sign(p.motion.speed);
+          r.vx += -Math.sin(angle) * sign * 1.8;
+          r.vy +=  Math.cos(angle) * sign * 1.8;
+        } else {
+          r.vx += (Math.random()-.5)*1.2;
+          r.vy += 0.15;
         }
-        drawPinball(); animFrame=requestAnimationFrame(step); return;
+        const s2=Math.hypot(r.vx,r.vy), cap=isBumper?MAX_SPEED*1.4:isWindmill?MAX_SPEED*1.5:MAX_SPEED;
+        if(s2>cap){r.vx=r.vx/s2*cap;r.vy=r.vy/s2*cap;}
+        hitPegs.set(i, performance.now());
+        spawnParticles(r.x, r.y, nx, ny, isBumper);
       }
+      const ov=minD-dist;
+      r.x+=nx*ov*1.08; r.y+=ny*ov*1.08;
+    }
+  }
 
-      /* 벽 충돌 */
-      if (ball.x-BALL_R < MARGIN)   { ball.x=MARGIN+BALL_R;   ball.vx= Math.abs(ball.vx)*RESTITUTION+0.3; }
-      if (ball.x+BALL_R > W-MARGIN) { ball.x=W-MARGIN-BALL_R; ball.vx=-Math.abs(ball.vx)*RESTITUTION-0.3; }
-
-      /* 페그 충돌 */
-      pegs.forEach((p, i) => {
-        const isBumper = p.type === 'bumper';
-        const pegR = isBumper ? Math.round(PEG_R*2) : PEG_R;
-        const dx=ball.x-p.x, dy=ball.y-p.y;
+  function resolveRacerCollisions() {
+    const minD = BALL_R * 1.4;
+    for (let i=0; i<racers.length; i++) {
+      const a = racers[i];
+      if (a.finished || a.y < FUNNEL_OPEN_Y) continue;
+      for (let j=i+1; j<racers.length; j++) {
+        const b = racers[j];
+        if (b.finished || b.y < FUNNEL_OPEN_Y) continue;
+        const dx=b.x-a.x, dy=b.y-a.y;
         const dist=Math.hypot(dx,dy);
-        const minD=BALL_R+pegR;
         if (dist < minD && dist > 0.01) {
           const nx=dx/dist, ny=dy/dist;
-          const dot=ball.vx*nx+ball.vy*ny;
-          if (dot < 0) {
-            const res = isBumper ? Math.min(RESTITUTION*1.5, 1.1) : RESTITUTION;
-            ball.vx=(ball.vx-2*dot*nx)*res;
-            ball.vy=(ball.vy-2*dot*ny)*res;
-            if (isBumper) { ball.vx+=nx*1.5; ball.vy+=ny*1.5; }
-            else           { ball.vx+=(Math.random()-.5)*1.2; }
-            const s2=Math.hypot(ball.vx,ball.vy), cap=isBumper?MAX_SPEED*1.4:MAX_SPEED;
-            if(s2>cap){ball.vx=ball.vx/s2*cap;ball.vy=ball.vy/s2*cap;}
-            hitPegs.set(i, performance.now());
-            spawnParticles(ball.x, ball.y, nx, ny, isBumper);
-          }
-          const ov=minD-dist;
-          ball.x+=nx*ov*1.08; ball.y+=ny*ov*1.08;
+          const overlap=(minD-dist)/2;
+          /* 수평만 분리 – 수직 분리 시 공 쌓임으로 서로 위로 밀어올려 멈춤 유발 */
+          a.x-=nx*overlap; b.x+=nx*overlap;
+          const rel=(b.vx-a.vx)*nx;
+          if (rel < 0) { a.vx+=rel*0.9*nx; b.vx-=rel*0.9*nx; }
+          a.vy += 0.1; b.vy += 0.1;
         }
-      });
-
-      drawPinball(); animFrame=requestAnimationFrame(step);
+      }
     }
-    animFrame=requestAnimationFrame(step);
+  }
+
+  /* ── 배경 색종이 ── */
+  function spawnBgSquare() {
+    if (bgSquares.length < 14 && Math.random() < 0.22) {
+      bgSquares.push({
+        x: MARGIN + Math.random()*(W-MARGIN*2),
+        y: -12,
+        size: 4 + Math.random()*5,
+        vy: 1 + Math.random()*1.8,
+        rot: Math.random()*Math.PI,
+        vr: (Math.random()-.5)*0.12,
+        color: COLORS[Math.floor(Math.random()*COLORS.length)],
+        alpha: 0.07 + Math.random()*0.08,
+      });
+    }
+  }
+  function updateBgSquares() {
+    bgSquares = bgSquares.filter(b => b.y < H + 20);
+    bgSquares.forEach(b => { b.y += b.vy; b.rot += b.vr; });
+  }
+
+  /* ── 대기 중 배경 애니메이션 ── */
+  function startIdleLoop() {
+    if (idleFrame || mode !== 'pinball' || racing) return;
+    idleFrame = requestAnimationFrame(idleTick);
+  }
+  function stopIdleLoop() {
+    if (idleFrame) { cancelAnimationFrame(idleFrame); idleFrame = null; }
+  }
+  function idleTick() {
+    if (mode !== 'pinball' || racing) { idleFrame = null; return; }
+    spawnBgSquare(); updateBgSquares();
+    drawPinball();
+    idleFrame = requestAnimationFrame(idleTick);
+  }
+
+  /* ── 레이스 시작 & 진행 ── */
+  function startRace() {
+    if (racing || !slots.length) return;
+    stopIdleLoop();
+    racing = true;
+    btnAction.disabled = true;
+    resultBox.className = 'result-box';
+    raceWinner = null; particles = [];
+
+    const cx = W / 2;
+    racers = slots.map(s => ({
+      label: s.label,
+      color: s.color,
+      x: cx + (Math.random()-.5) * funnelNeckHalf * 1.5,
+      y: FUNNEL_TOP + 4 + Math.random() * (slots.length * 4),
+      vx: (Math.random()-.5)*0.6,
+      vy: 0.3 + Math.random()*0.3,
+      finished: false,
+      trail: [],
+    }));
+    scrollY = 0;
+
+    animFrame = requestAnimationFrame(raceStep);
+  }
+
+  function raceStep() {
+    const now = performance.now();
+    spawnBgSquare(); updateBgSquares();
+    updateDynamicPegs(now);
+
+    let winnerFound = null;
+    racers.forEach(r => {
+      if (r.finished) return;
+      r.vy += GRAVITY;
+      r.vx *= FRICTION_X;
+      const spd = Math.hypot(r.vx, r.vy);
+      if (spd > MAX_SPEED) { r.vx = r.vx/spd*MAX_SPEED; r.vy = r.vy/spd*MAX_SPEED; }
+      r.trail.push({ x: r.x, y: r.y });
+      if (r.trail.length > 6) r.trail.shift();
+      r.x += r.vx; r.y += r.vy;
+      if (r.y < BALL_R) { r.y = BALL_R; r.vy = Math.abs(r.vy) * 0.5; }
+
+      if (r.y < FUNNEL_NECK_Y) {
+        collideSegment(r, funnelWalls[0]);
+        collideSegment(r, funnelWalls[1]);
+        funnelBaffles.forEach(seg => collideSegment(r, seg));
+      } else if (r.y < FUNNEL_OPEN_Y) {
+        funnelWalls.forEach(seg => collideSegment(r, seg));
+      } else {
+        if (r.x-BALL_R < MARGIN)   { r.x=MARGIN+BALL_R;   r.vx= Math.abs(r.vx)*RESTITUTION+0.3; }
+        if (r.x+BALL_R > W-MARGIN) { r.x=W-MARGIN-BALL_R; r.vx=-Math.abs(r.vx)*RESTITUTION-0.3; }
+        pegs.forEach((p, i) => collidePeg(r, p, i));
+        /* 바람개비 날개 선분 충돌 – 교차 감지(터널링 방지) + 근접 감지 */
+        pegs.forEach((p, i) => {
+          if (p.type !== 'windmill-blade' || !p.motion) return;
+          const ax=p.motion.cx, ay=p.motion.cy, bx=p.x, by=p.y;
+          const ddx=bx-ax, ddy=by-ay;
+          const blen=Math.hypot(ddx,ddy)||1;
+          /* 날개 법선 (수직 방향) */
+          const bnx=-ddy/blen, bny=ddx/blen;
+          /* 이전 위치 (trail에 이동 전 위치가 저장돼 있음) */
+          const prev=r.trail.length ? r.trail[r.trail.length-1] : {x:r.x-r.vx,y:r.y-r.vy};
+          const d0=(prev.x-ax)*bnx+(prev.y-ay)*bny; // 이전 위치의 날개 법선 거리
+          const d1=(r.x-ax)*bnx+(r.y-ay)*bny;       // 현재 위치의 날개 법선 거리
+          let handled=false;
+          /* ① 교차 감지: 부호가 바뀌면 날개를 통과한 것 */
+          if (d0*d1 < 0) {
+            const tc=d0/(d0-d1);
+            const hx=prev.x+(r.x-prev.x)*tc, hy=prev.y+(r.y-prev.y)*tc;
+            const along=((hx-ax)*ddx+(hy-ay)*ddy)/(blen*blen);
+            if (along>=0.02 && along<=0.98) {
+              const side=d0>0?1:-1;
+              const cnx=bnx*side, cny=bny*side;
+              const dot=r.vx*cnx+r.vy*cny;
+              if (dot<0) {
+                r.vx=(r.vx-2*dot*cnx)*1.1; r.vy=(r.vy-2*dot*cny)*1.1;
+                const ang=p.motion.angle0+performance.now()*0.001*p.motion.speed;
+                const sg=Math.sign(p.motion.speed);
+                r.vx+=-Math.sin(ang)*sg*1.6*along; r.vy+=Math.cos(ang)*sg*1.6*along;
+                const s2=Math.hypot(r.vx,r.vy);
+                if(s2>MAX_SPEED*1.5){r.vx=r.vx/s2*MAX_SPEED*1.5;r.vy=r.vy/s2*MAX_SPEED*1.5;}
+                hitPegs.set(i,performance.now()); spawnParticles(hx,hy,cnx,cny,false);
+              }
+              r.x=hx+cnx*(BALL_R+1); r.y=hy+cny*(BALL_R+1);
+              handled=true;
+            }
+          }
+          /* ② 근접 감지: 이미 날개에 가까운 경우 */
+          if (!handled) {
+            const len2=blen*blen;
+            let t=((r.x-ax)*ddx+(r.y-ay)*ddy)/len2;
+            t=Math.max(0.05,Math.min(0.97,t));
+            const px=ax+ddx*t, py=ay+ddy*t;
+            const nx0=r.x-px, ny0=r.y-py, dist=Math.hypot(nx0,ny0);
+            const bladeR=BALL_R+2;
+            if (dist<bladeR && dist>0.001) {
+              const nx=nx0/dist, ny=ny0/dist, dot=r.vx*nx+r.vy*ny;
+              if (dot<0) {
+                r.vx=(r.vx-2*dot*nx)*1.1; r.vy=(r.vy-2*dot*ny)*1.1;
+                const ang=p.motion.angle0+performance.now()*0.001*p.motion.speed;
+                const sg=Math.sign(p.motion.speed);
+                r.vx+=-Math.sin(ang)*sg*1.6*t; r.vy+=Math.cos(ang)*sg*1.6*t;
+                const s2=Math.hypot(r.vx,r.vy);
+                if(s2>MAX_SPEED*1.5){r.vx=r.vx/s2*MAX_SPEED*1.5;r.vy=r.vy/s2*MAX_SPEED*1.5;}
+                hitPegs.set(i,performance.now()); spawnParticles(r.x,r.y,nx,ny,false);
+              }
+              r.x+=nx*(bladeR-dist)*1.05; r.y+=ny*(bladeR-dist)*1.05;
+            }
+          }
+        });
+        midWalls.forEach(seg => collideSegment(r, seg));
+      }
+
+      /* 멈춤 방지 ① 하강 속도 낮으면 중력 보정 + 좌우 흔들기 */
+      if (r.y > FUNNEL_OPEN_Y && r.vy < 0.8) {
+        r.vy += 0.12;
+        r.vx += (Math.random() - 0.5) * 0.2;
+      }
+
+      /* 멈춤 방지 ② 완전 정지 감지 → 즉시 강제 킥 */
+      if (r.y > FUNNEL_OPEN_Y && Math.hypot(r.vx, r.vy) < 0.2) {
+        r.vy = 2.0;
+        r.vx = (Math.random() - 0.5) * 1.5;
+      }
+
+      /* 멈춤 방지 ③ 20프레임마다 진행량 체크 → 페그 위치를 강제 통과 */
+      r._stuckTick = ((r._stuckTick || 0) + 1);
+      if (r._stuckTick % 20 === 1) r._stuckRefY = r.y;
+      if (r._stuckTick % 20 === 0 && r.y - r._stuckRefY < 3) {
+        r.y += (BALL_R + PEG_R) * 2.5;
+        r.vy = 2.0;
+        r.vx = (Math.random() - 0.5) * 2.0;
+      }
+
+      if (r.y + BALL_R >= FIELD_BOT) {
+        r.finished = true;
+        r.y = FIELD_BOT - BALL_R;
+        if (!winnerFound) winnerFound = r;
+      }
+    });
+
+    resolveRacerCollisions();
+
+    /* 카메라 스크롤: 선두 공을 따라 부드럽게 이동 */
+    const leadY = Math.max(...racers.map(r => r.y));
+    const target = Math.max(0, Math.min(WORLD_H - H, leadY - H*0.42));
+    scrollY += (target - scrollY) * 0.09;
+
+    drawPinball();
+
+    if (winnerFound) {
+      racing = false;
+      btnAction.disabled = false;
+      raceWinner = winnerFound;
+      raceEndT = performance.now();
+      showResult(winnerFound.label, winnerFound.color);
+      startIdleLoop();
+      return;
+    }
+    animFrame = requestAnimationFrame(raceStep);
   }
 
   /* ════════════════════════════
      결과 표시 (공통)
   ════════════════════════════ */
-  function showResult(idx) {
-    const winner = slots[idx];
-    const label  = (winner.label || `항목 ${idx+1}`).trim();
+  function showResult(label, color) {
+    const text = (label || '').trim() || '참가자';
     resultLabel.textContent = '🎉 당첨!';
-    resultValue.textContent = label;
-    resultValue.style.background = `linear-gradient(135deg, ${winner.color}, #fff)`;
+    resultValue.textContent = text;
+    resultValue.style.background = `linear-gradient(135deg, ${color}, #fff)`;
     resultValue.style.webkitBackgroundClip = 'text';
     resultValue.style.backgroundClip = 'text';
     resultBox.className = 'result-box show';
@@ -1200,7 +1587,7 @@
   ════════════════════════════ */
   btnAction.addEventListener('click', () => {
     if (mode === 'spin') spin();
-    else dropBall();
+    else startRace();
   });
 
   btnApply.addEventListener('click', () => {
@@ -1209,7 +1596,15 @@
     slotCountInput.value = count;
     buildSlots(count, slots.map(s => s.label));
     renderInputs();
-    if (mode === 'pinball') { MARGIN = Math.round(W*.055); const slotW=(W-MARGIN*2)/count; BALL_R=Math.max(4,Math.min(11,Math.floor(slotW/5.5))); PEG_R=Math.max(3,Math.round(BALL_R*.60)); buildPegs(); }
+    if (mode === 'pinball') {
+      raceWinner = null; racers = []; scrollY = 0;
+      MARGIN = Math.round(W*.055);
+      const slotW=(W-MARGIN*2)/count;
+      BALL_R=Math.max(4,Math.min(10,Math.floor(slotW/6)));
+      PEG_R=Math.max(3,Math.round(BALL_R*.60));
+      computeFunnelWalls();
+      buildPegs();
+    }
     drawBoard();
   });
 
@@ -1220,6 +1615,7 @@
     buildSlots(6);
     slotCountInput.value = 6;
     renderInputs();
+    raceWinner = null; racers = []; scrollY = 0;
     if (mode === 'pinball') buildPegs();
     drawBoard();
     resultBox.className = 'result-box';
@@ -1247,6 +1643,7 @@
     localStorage.removeItem(STORAGE_KEY);
     buildSlots(6); slotCountInput.value = 6;
     renderInputs();
+    raceWinner = null; racers = []; scrollY = 0;
     if (mode === 'pinball') buildPegs();
     drawBoard();
     resultBox.className = 'result-box';
@@ -1263,7 +1660,12 @@
     buildSlots(count, preset.items);
     slotCountInput.value = count;
     renderInputs();
-    if (mode === 'pinball') { MARGIN=Math.round(W*.055); const slotW=(W-MARGIN*2)/count; BALL_R=Math.max(4,Math.min(11,Math.floor(slotW/5.5))); PEG_R=Math.max(3,Math.round(BALL_R*.60)); buildPegs(); }
+    raceWinner = null; racers = []; scrollY = 0;
+    if (mode === 'pinball') {
+      MARGIN=Math.round(W*.055); const slotW=(W-MARGIN*2)/count;
+      BALL_R=Math.max(4,Math.min(10,Math.floor(slotW/6))); PEG_R=Math.max(3,Math.round(BALL_R*.60));
+      computeFunnelWalls(); buildPegs();
+    }
     drawBoard();
     resultBox.className = 'result-box';
     showMsg(`✔ "${preset.title}" 불러왔어요!`);
@@ -1303,15 +1705,19 @@
     document.body.classList.toggle('mode-pinball', isPinball);
     verSpin.classList.toggle('active', !isPinball);
     verPinball.classList.toggle('active', isPinball);
-    logo.textContent      = isPinball ? '🎰' : '🎡';
+    logo.textContent      = isPinball ? '🎪' : '🎡';
     titleMain.childNodes[0].textContent = isPinball ? 'Pinball Picker ' : 'Spin Picker ';
     titleSub.textContent  = isPinball ? '핀볼 뽑기' : '뽑기판';
-    btnAction.textContent = isPinball ? '▼ 공 떨어뜨리기!' : '▶ 돌리기!';
+    btnAction.textContent = isPinball ? '🏁 레이스 시작!' : '▶ 돌리기!';
     document.title        = isPinball ? 'Pinball Picker · 핀볼 뽑기' : 'Spin Picker · 뽑기판';
+    lblSlotSection.textContent  = isPinball ? '참가자 수 설정' : '칸 수 설정';
+    lblSlotCount.textContent    = isPinball ? '참가자 수' : '칸 수';
+    lblItemsSection.textContent = isPinball ? '참가자 이름' : '항목 입력';
     slotCountInput.max    = isPinball ? 10 : 20;
 
     renderInputs();
     resizeCanvas();
+    if (isPinball) startIdleLoop();
   })();
 </script>
 
